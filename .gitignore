@@ -1,0 +1,6 @@
+env/
+stockfish/
+*.pgn
+.DS_Store
+__pycache__/
+*.log
