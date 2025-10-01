@@ -2,52 +2,63 @@ import chess.pgn
 import chess.engine
 import os 
 import subprocess
+import tempfile
+from PIL import Image
+import cairosvg
 
 # Path to the Stockfish executable
 engine_path = "./stockfish/stockfish-macos-m1-apple-silicon"
 
-# Start Stockfish engine process
-engine = subprocess.Popen(
-    engine_path,
-    universal_newlines=True,
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE
-)
+def analyze_with_logs(game, engine_path):
+    # start Stockfish subprocess
+    engine = subprocess.Popen(
+        engine_path,
+        universal_newlines=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1
+    )
 
-# Send a UCI command to check it's working
-engine.stdin.write("uci\n")
-engine.stdin.flush()
+    # init UCI
+    engine.stdin.write("uci\n")
+    engine.stdin.flush()
+    while True:
+        if "uciok" in engine.stdout.readline():
+            break
 
-# Read the engine response
-while True:
-    output = engine.stdout.readline()
-    print(output.strip())
-    if "uciok" in output:
-        break
+    board = game.board()
+    logs = []
 
-# Example: set up position and ask for best move
-engine.stdin.write("position startpos\n")
-engine.stdin.write("go depth 10\n")
-engine.stdin.flush()
+    for move in game.mainline_moves():
+        board.push(move)
+        fen = board.fen()
 
-# Read best move output
-while True:
-    output = engine.stdout.readline()
-    print(output.strip())
-    if "bestmove" in output:
-        break
+        engine.stdin.write(f"position fen {fen}\n")
+        engine.stdin.write("go depth 12\n")
+        engine.stdin.flush()
 
-# Close engine process
-engine.stdin.write("quit\n")
-engine.stdin.flush()
-engine.terminate()
+        move_log = []
+        while True:
+            output = engine.stdout.readline()
+            move_log.append(output.strip())
+            if "bestmove" in output:
+                break
+        logs.append({"move": move.uci(), "fen": fen, "log": move_log})
+
+    engine.stdin.write("quit\n")
+    engine.stdin.flush()
+    engine.terminate()
+
+    return logs
+
 # Loading PGN file
 def load_game_from_pgn(file_path):
     with open(file_path) as pgn_file:
         game = chess.pgn.read_game(pgn_file)
     return game
 
-# Analyze moves using Stockfish
+# Analyze moves 
 def evaluate_game(game, stockfish_path="./stockfish"):
     board = game.board()
     engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
@@ -65,22 +76,64 @@ def evaluate_game(game, stockfish_path="./stockfish"):
     engine.quit()
     return evaluations
 
+# Analyze game and return feedback
+def analyze_game(game, engine_path):
+    board = game.board()
+    engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+    analysis = []
+
+    for i, move in enumerate(game.mainline_moves(), start=1):
+        info_before = engine.analyse(board, chess.engine.Limit(depth=15))
+        eval_before = info_before["score"].relative.score(mate_score=10000)
+        best_move = engine.play(board, chess.engine.Limit(depth=15)).move
+        pv_line = info_before.get("pv", [])
+
+        player_move = move
+        move_quality = classify_move(player_move, best_move, eval_before)
+
+        board.push(move)
+        info_after = engine.analyse(board, chess.engine.Limit(depth=15))
+        eval_after = info_after["score"].relative.score(mate_score=10000)
+        eval_diff = None
+        if eval_before is not None and eval_after is not None:
+            eval_diff = eval_before - eval_after
+
+        analysis.append({
+            "move_num": i,
+            "move": player_move,
+            "best_move": best_move,
+            "eval_before": eval_before,
+            "eval_after": eval_after,
+            "eval_diff": eval_diff,
+            "classification": move_quality,
+            "pv": pv_line,
+            "board_fen": board.fen()
+        })
+
+    engine.quit()
+    return analysis
+
+
+
+# Convert board to image to FEN
+def render_board_svg(fen):
+    board = chess.Board(fen)
+    svg = chess.svg.board(board, size=400)
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=f.name)
+        return Image.open(f.name)
+
 # Simple classification (expand later)
-def classify_move(player_move, best_move, eval_score):
+def classify_move(player_move, best_move, eval_diff):
     if player_move == best_move:
         return "Good"
-    elif eval_score is not None:
-        if abs(eval_score) < 50:
+    elif eval_diff is not None:
+        if abs(eval_diff) < 50:
             return "Inaccuracy"
-        elif abs(eval_score) < 200:
+        elif abs(eval_diff) < 200:
             return "Mistake"
         else:
             return "Blunder"
     return "Unknown"
 
-# Example usage
-if __name__ == "__main__":
-    game = load_game_from_pgn("lichess_db_standard_rated_2014-08.pgn")
-    evals = evaluate_game(game)
-    for move, label in evals:
-        print(f"{move}: {label}")
+
