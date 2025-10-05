@@ -96,15 +96,20 @@ def analyze_game(game, engine_path):
         eval_after = info_after["score"].relative.score(mate_score=10000)
         eval_diff = None
         if eval_before is not None and eval_after is not None:
-            eval_diff = eval_before - eval_after
+            # eval_after is from the next player's perspective, so we negate it
+            # to get the evaluation from the current player's perspective.
+            eval_diff = eval_before - (-eval_after)
+
+        # The classification should be based on the drop in evaluation.
+        move_quality = classify_move(player_move, best_move, eval_diff)
 
         analysis.append({
             "move_num": i,
             "move": player_move,
             "best_move": best_move,
             "eval_before": eval_before,
-            "eval_after": eval_after,
-            "eval_diff": eval_diff,
+            "eval_after": eval_after, # This is from the opponent's perspective
+            "eval_diff": eval_diff, # This is the centipawn loss
             "classification": move_quality,
             "pv": pv_line,
             "board_fen": board.fen()
@@ -124,16 +129,23 @@ def render_board_svg(fen):
         return Image.open(f.name)
 
 # Simple classification (expand later)
-def classify_move(player_move, best_move, eval_diff):
+def classify_move(player_move, best_move, centipawn_loss):
+    """
+    Classifies a move based on the centipawn loss.
+    `centipawn_loss` is the difference between the evaluation of the position
+    before the move and the evaluation after the move from the same player's perspective.
+    A positive value means a drop in evaluation.
+    """
     if player_move == best_move:
-        return "Good"
-    elif eval_diff is not None:
-        if abs(eval_diff) < 50:
+        return "Best Move"
+    
+    if centipawn_loss is not None:
+        if centipawn_loss < 20:
+            return "Excellent"
+        elif centipawn_loss < 50:
             return "Inaccuracy"
-        elif abs(eval_diff) < 200:
+        elif centipawn_loss < 150:
             return "Mistake"
         else:
             return "Blunder"
     return "Unknown"
-
-
