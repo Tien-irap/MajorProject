@@ -5,6 +5,11 @@ import subprocess
 import tempfile
 from PIL import Image
 import cairosvg
+from move_classifier import (
+    classify_move_by_win_prob,
+    centipawns_to_win_probability
+)
+
 
 # Path to the Stockfish executable
 engine_path = "./stockfish/stockfish-macos-m1-apple-silicon"
@@ -95,13 +100,21 @@ def analyze_game(game, engine_path):
         info_after = engine.analyse(board, chess.engine.Limit(depth=15))
         eval_after = info_after["score"].relative.score(mate_score=10000)
         eval_diff = None
+        eval_after_player = None
         if eval_before is not None and eval_after is not None:
             # eval_after is from the next player's perspective, so we negate it
             # to get the evaluation from the current player's perspective.
-            eval_diff = eval_before - (-eval_after)
+            eval_after_player = -eval_after
+            eval_diff = eval_before - eval_after_player
 
         # The classification should be based on the drop in evaluation.
-        move_quality = classify_move(player_move, best_move, eval_diff)
+        # OLD CLASSIFICATION:
+        move_quality_cp = classify_move(player_move, best_move, eval_diff)
+        # NEW WIN PROBABILITY CLASSIFICATION:
+        move_quality_wp = classify_move_by_win_prob(player_move, best_move, eval_before, eval_after_player)
+
+        win_prob_before = centipawns_to_win_probability(eval_before)
+        win_prob_after = centipawns_to_win_probability(eval_after_player)
 
         analysis.append({
             "move_num": i,
@@ -110,7 +123,11 @@ def analyze_game(game, engine_path):
             "eval_before": eval_before,
             "eval_after": eval_after, # This is from the opponent's perspective
             "eval_diff": eval_diff, # This is the centipawn loss
-            "classification": move_quality,
+            "classification": move_quality_cp, # Keep old one for reference if needed
+            "classification_wp": move_quality_wp, # New classification
+            "win_prob_before": win_prob_before,
+            "win_prob_after": win_prob_after,
+            "win_prob_drop": win_prob_before - win_prob_after,
             "pv": pv_line,
             "board_fen": board.fen()
         })
