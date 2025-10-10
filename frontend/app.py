@@ -7,8 +7,8 @@ import tempfile
 from PIL import Image
 import cairosvg
 
-from analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
-from llm_analyzer import get_llm_summary_for_game
+from backend.app.services.analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
+from backend.app.services.llm_analyzer import get_llm_summary_for_game
 
 # --- Streamlit App UI ---
 st.set_page_config(page_title="Chess Tutor", layout="wide")
