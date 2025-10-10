@@ -5,17 +5,14 @@ from dotenv import load_dotenv
 
 # --- Configuration ---
 API_URL = "https://api.mistral.ai/v1/chat/completions"
-MODEL = "mistral-small-latest" # Using a slightly more powerful model for better analysis
+MODEL = "mistral-small-latest" 
 
 # Load environment variables from .env file
 load_dotenv()
 
-def _call_mistral_api(prompt, api_key): # api_key is now passed from get_llm_summary_for_game
-    """
-    Helper function to call the Mistral API and return the response content.
-    """
+def _call_mistral_api(prompt, api_key): 
     if not api_key:
-        return "Error: Mistral API key is missing." # Should not happen if checked in calling function
+        return "Error: Mistral API key is missing." 
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -76,7 +73,7 @@ def get_llm_summary_for_game(analysis_data):
     and returns a summary report as a dictionary.
     """
     api_key = os.getenv("MISTRAL_API_KEY")
-    if not api_key: # Check for API key here
+    if not api_key: 
         return {"error": "Mistral API key not found in environment variables. Please ensure it's set in your .env file (e.g., MISTRAL_API_KEY='your_key_here')."}
         
     summary = {}
@@ -94,17 +91,14 @@ def get_llm_summary_for_game(analysis_data):
     )
 
     summary['mistakes'] = []
-    for i, mistake in enumerate(mistakes[:10]): # Get explanations for top 10 mistakes
+    for i, mistake in enumerate(mistakes[:10]): 
         move_num = mistake['move_num']
         board_before = chess.Board() # Default to starting position
         if move_num > 1:
-            # The 'board_fen' from the *previous* move's analysis is the state *before* this move.
-            # `move_num` is 1-based, list is 0-based. So we access `move_num - 2`.
-            # This logic is correct for getting the FEN *before* the current move.
             board_before = chess.Board(analysis_data[move_num - 2]['board_fen'])
         
         prompt = _create_prompt(mistake, board_before, "mistake")
-        explanation = _call_mistral_api(prompt, api_key) # Pass api_key
+        explanation = _call_mistral_api(prompt, api_key) 
         summary['mistakes'].append({
             "move_info": mistake,
             "board_before_fen": board_before.fen(),
@@ -112,15 +106,14 @@ def get_llm_summary_for_game(analysis_data):
         })
 
     summary['best_moves'] = []
-    for i, best_move_data in enumerate(best_moves[:10]): # Get explanations for top 10 best moves
+    for i, best_move_data in enumerate(best_moves[:10]): 
         move_num = best_move_data['move_num']
         board_before = chess.Board() # Default to starting position
         if move_num > 1:
-            # Same logic for getting the FEN *before* the current move.
             board_before = chess.Board(analysis_data[move_num - 2]['board_fen'])
         
         prompt = _create_prompt(best_move_data, board_before, "best_move")
-        explanation = _call_mistral_api(prompt, api_key) # Pass api_key
+        explanation = _call_mistral_api(prompt, api_key)
         summary['best_moves'].append({
             "move_info": best_move_data,
             "board_before_fen": board_before.fen(),

@@ -97,17 +97,15 @@ def analyze_game(game, engine_path):
         move_quality = classify_move(player_move, best_move, eval_before)
 
         board.push(move)
-        info_after = engine.analyse(board, chess.engine.Limit(depth=15))
+        info_after = engine.analyse(board, chess.engine.Limit(depth=15)) 
         eval_after = info_after["score"].relative.score(mate_score=10000)
         eval_diff = None
         eval_after_player = None
         if eval_before is not None and eval_after is not None:
-            # eval_after is from the next player's perspective, so we negate it
-            # to get the evaluation from the current player's perspective.
-            eval_after_player = -eval_after
+            eval_after_player = -eval_after # eval_after is from the next player's perspective, so we negate it
             eval_diff = eval_before - eval_after_player
 
-        # The classification should be based on the drop in evaluation.
+        
         # OLD CLASSIFICATION:
         move_quality_cp = classify_move(player_move, best_move, eval_diff)
         # NEW WIN PROBABILITY CLASSIFICATION:
@@ -121,10 +119,10 @@ def analyze_game(game, engine_path):
             "move": player_move,
             "best_move": best_move,
             "eval_before": eval_before,
-            "eval_after": eval_after, # This is from the opponent's perspective
-            "eval_diff": eval_diff, # This is the centipawn loss
-            "classification": move_quality_cp, # Keep old one for reference if needed
-            "classification_wp": move_quality_wp, # New classification
+            "eval_after": eval_after, 
+            "eval_diff": eval_diff, 
+            "classification": move_quality_cp, 
+            "classification_wp": move_quality_wp, 
             "win_prob_before": win_prob_before,
             "win_prob_after": win_prob_after,
             "win_prob_drop": win_prob_before - win_prob_after,
@@ -145,16 +143,10 @@ def render_board_svg(fen):
         cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=f.name)
         return Image.open(f.name)
 
-# Simple classification (expand later)
+# Simple classification 
 def classify_move(player_move, best_move, centipawn_loss):
-    """
-    Classifies a move based on the centipawn loss.
-    `centipawn_loss` is the difference between the evaluation of the position
-    before the move and the evaluation after the move from the same player's perspective.
-    A positive value means a drop in evaluation.
-    """
     if player_move == best_move:
-        return "Best Move"
+        return "Best Move"  # A positive value means a drop in evaluation.
     
     if centipawn_loss is not None:
         if centipawn_loss < 20:
