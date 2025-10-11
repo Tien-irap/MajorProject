@@ -1,3 +1,4 @@
+#parse_log
 import re
 import chess
 import chess.svg

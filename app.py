@@ -1,3 +1,4 @@
+# app
 import streamlit as st
 import chess.pgn
 import chess.engine
@@ -20,7 +21,7 @@ st.markdown("Upload a PGN file of a completed game to get a detailed analysis an
 #    st.info("Your PGN analysis will appear on the main page after you upload a file.")
 
 
-stockfish_path = "./stockfish/stockfish-macos-m1-apple-silicon"
+stockfish_path = "D:\\6th sem\\MP\\MajorProject\\stockfish\\stockfish.exe"
 
 uploaded_file = st.file_uploader("Upload Your PGN File Here", type=["pgn"])
 
