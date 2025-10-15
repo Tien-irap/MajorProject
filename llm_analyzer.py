@@ -67,6 +67,50 @@ def _create_prompt(move_data, board_before_move, move_type):
     """
     return prompt.strip()
 
+def _create_weakness_prompt(profile_data, player_name):
+    """Creates a prompt for the LLM to explain a specific weakness profile."""
+    prompt = f"""
+    You are an expert chess coach summarizing a player's weakness. Your tone is encouraging and focused on improvement.
+
+    **Player:** {player_name}
+
+    **Identified Weakness Profile:**
+    - **Profile Name:** {profile_data['profile_name']}
+    - **Number of Mistakes in this Category:** {profile_data['num_mistakes']}
+    - **Average Severity:** {profile_data['avg_centipawn_loss']} centipawn loss
+
+    **Your Task:**
+    Based on the profile name (e.g., "Middlegame Errors: Failing to convert a winning advantage"), provide a short, insightful paragraph explaining this weakness.
+    1.  **Explain the Pattern:** Describe what this pattern of mistakes means in simple terms.
+    2.  **Give Actionable Advice:** Provide one or two concrete tips on how the player can work on this weakness. For example, suggest specific things to think about during a game or types of puzzles to practice.
+    3.  **Keep it encouraging and concise.**
+
+    **Example Output Structure:**
+    "It looks like you sometimes struggle in complex middlegame positions when you have a winning advantage. This often happens when... To improve, try to... Before you move, always ask yourself..."
+    """
+    return prompt.strip()
+
+def get_llm_weakness_summary(weakness_profiles, player_name="Player"):
+    """
+    Uses an LLM to generate a narrative explanation for identified weakness profiles.
+    """
+    api_key = os.getenv("MISTRAL_API_KEY")
+    if not api_key:
+        return {"error": "Mistral API key not found."}
+
+    # This will store the LLM explanation inside the original profile data
+    explained_profiles = {}
+    for profile_key, profile_data in weakness_profiles.items():
+        prompt = _create_weakness_prompt(profile_data, player_name)
+        explanation = _call_mistral_api(prompt, api_key)
+
+        # Add the explanation to the profile
+        new_profile_data = profile_data.copy()
+        new_profile_data["llm_explanation"] = explanation
+        explained_profiles[profile_key] = new_profile_data
+
+    return explained_profiles
+
 def get_llm_summary_for_game(analysis_data): 
     """
     Takes the full game analysis, identifies key moves, gets LLM explanations,
