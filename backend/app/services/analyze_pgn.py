@@ -5,10 +5,7 @@ import subprocess
 import tempfile
 from PIL import Image
 import cairosvg
-from backend.app.services.move_classifier import (
-    classify_move_by_win_prob,
-    centipawns_to_win_probability
-)
+from move_classifier import classify_move_by_win_prob,centipawns_to_win_probability
 
 
 # Path to the Stockfish executable

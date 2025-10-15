@@ -27,7 +27,15 @@ def analyze_player_weaknesses(analysis_data, player_name="Player", n_clusters=4)
     features = []
     for move_data in mistakes_data:
         # Get the board state *before* the move to calculate piece count
-        board_before_fen = analysis_data[move_data['move_num'] - 2]['board_fen'] if move_data['move_num'] > 1 else chess.STARTING_FEN
+        board_before_fen = chess.STARTING_FEN
+        if move_data['move_num'] > 1:
+            # Find the analysis data for the move *before* the current one.
+            # This is safer than assuming the index `move_num - 2` is correct,
+            # especially if the list was ever filtered.
+            previous_move_data = next((m for m in analysis_data if m['move_num'] == move_data['move_num'] - 1), None)
+            if previous_move_data:
+                board_before_fen = previous_move_data['board_fen']
+
         board = chess.Board(board_before_fen)
         
         features.append({
