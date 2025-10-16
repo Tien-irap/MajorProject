@@ -6,11 +6,14 @@ import io
 import tempfile
 from PIL import Image
 import cairosvg
+import pandas as pd
+import os
 
 from analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
-from llm_analyzer import get_llm_summary_for_game, get_llm_weakness_summary
-from weakness_analysis import analyze_player_weaknesses
+from llm_analyzer import get_llm_summary_for_game # Keep for game summary
+from weakness_analysis import analyze_player_weaknesses_global, generate_llm_explanation
 from puzzle_generator import generate_puzzle_from_weakness 
+from global_analyzer import GlobalAnalyzer
 
 # --- Streamlit App UI ---
 st.set_page_config(page_title="Chess Tutor", layout="wide")
@@ -23,6 +26,38 @@ st.markdown("Upload a PGN file of a completed game to get a detailed analysis an
 
 
 stockfish_path = "./stockfish/stockfish-macos-m1-apple-silicon"
+
+# --- Global Analyzer Setup with Caching ---
+GLOBAL_DATA_PATH = "output/global_mistake_features.csv"
+
+@st.cache_resource
+def load_and_train_global_analyzer():
+    """
+    Loads the global mistake data and trains the GlobalAnalyzer.
+    This is cached to prevent re-training on every app rerun.
+    """
+    try:
+        global_df = pd.read_csv(GLOBAL_DATA_PATH)
+        st.info("✅ Loaded global analysis data.")
+    except FileNotFoundError:
+        st.warning(f"🚨 Global data not found at {GLOBAL_DATA_PATH}. Using dummy data for demonstration.")
+        # Create a dummy dataframe with the expected features
+        global_df = pd.DataFrame({
+            'move_num': [10, 25, 40, 15, 30, 45, 12, 38],
+            'eval_before': [100, -50, 50, 800, 20, -100, 200, 10],
+            'eval_diff': [150, 450, 300, 80, 600, 1000, 100, 400],
+            'board_piece_count': [30, 25, 15, 30, 20, 10, 30, 18],
+            'classification': ['Mistake', 'Blunder', 'Mistake', 'Mistake', 'Blunder', 'Blunder', 'Mistake', 'Blunder'],
+            'player_elo': [1400, 1500, 1600, 1400, 1700, 1800, 1300, 1500]
+        })
+
+    # Initialize and train the global model
+    analyzer = GlobalAnalyzer(n_clusters=4)
+    analyzer.train_global_model(global_df)
+    return analyzer
+
+# Load the analyzer once
+global_analyzer = load_and_train_global_analyzer()
 
 uploaded_file = st.file_uploader("Upload Your PGN File Here", type=["pgn"])
 
@@ -39,13 +74,16 @@ if uploaded_file is not None:
             llm_summary = get_llm_summary_for_game(analysis_result) # No API key argument needed here
         
         # Perform weakness analysis
-        player_name = game.headers.get("White", "Player") if game.headers.get("Result") == "1-0" else game.headers.get("Black", "Player")
-        weakness_profiles = analyze_player_weaknesses(analysis_result, player_name=player_name)
+        player_name = game.headers.get("White", "User") if game.headers.get("Result") == "1-0" else game.headers.get("Black", "User")
+        
+        # NEW: Use the global weakness analysis
+        weakness_summary = analyze_player_weaknesses_global(analysis_result, global_analyzer, player_name)
 
-        # Get LLM explanations for the weaknesses
-        if weakness_profiles:
+        # NEW: Generate LLM explanations for the weaknesses
+        if weakness_summary:
             with st.spinner("AI Coach is preparing your personalized weakness report..."):
-                explained_weaknesses = get_llm_weakness_summary(weakness_profiles, player_name)
+                for profile_name, summary_data in weakness_summary.items():
+                    summary_data['llm_explanation'] = generate_llm_explanation(summary_data)
 
         st.header("AI Coach Summary")
         
@@ -124,22 +162,22 @@ if uploaded_file is not None:
                 st.markdown("---")
 
         # --- Weakness Analysis Section ---
-        if weakness_profiles and 'error' not in explained_weaknesses:
+        if weakness_summary:
             st.header("🧠 Personalized Weakness Report")
             st.markdown("Based on the mistakes in this game, here are some patterns the AI coach identified.")
 
-            for profile_key, profile_data in explained_weaknesses.items():
-                st.subheader(f"{profile_data['profile_name']}")
+            for profile_key, profile_data in weakness_summary.items():
+                st.subheader(f"{profile_data['global_pattern_name']}")
                 
                 cols = st.columns([2, 1])
                 with cols[0]:
                     st.info(f"**Coach's Diagnosis:** {profile_data['llm_explanation']}")
                     st.write(f"**Mistakes in this category:** {profile_data['num_mistakes']}")
-                    st.write(f"**Average Severity:** {profile_data['avg_centipawn_loss']}cp loss")
+                    st.write(f"**Average Severity:** {profile_data['avg_centipawn_loss']} cp loss")
 
                 with cols[1]:
                     # Find the first example move's data to show the board
-                    example_move_uci = profile_data['example_moves'][0]
+                    example_move_uci = profile_data['example_moves'][0] if profile_data['example_moves'] else None
                     move_data = next((m for m in analysis_result if m['move'].uci() == example_move_uci), None)
                     if move_data:
                         # Get board state *before* the move
@@ -150,7 +188,7 @@ if uploaded_file is not None:
                 # --- Interactive Puzzle Section ---
                 if st.button("Practice this weakness", key=f"practice_{profile_key}"):
                     with st.spinner("Generating a custom puzzle for you..."):
-                        puzzle_data = generate_puzzle_from_weakness(profile_data['profile_name'])
+                        puzzle_data = generate_puzzle_from_weakness(profile_data['global_pattern_name'])
 
                     if "error" in puzzle_data:
                         st.error(f"Could not generate puzzle: {puzzle_data['error']}")
@@ -188,7 +226,5 @@ if uploaded_file is not None:
                             st.write("That's a common mistake, but not the best move here.")
 
                 st.markdown("---")
-        elif weakness_profiles and 'error' in explained_weaknesses:
-            st.error(f"Could not generate weakness report: {explained_weaknesses['error']}")
     else:
         st.error("Could not read the PGN file. Please ensure it's a valid PGN.")

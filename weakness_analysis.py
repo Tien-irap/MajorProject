@@ -33,7 +33,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
         
         features.append({
             'move_num': move_data['move_num'],
-            'eval_before': move_data['eval_before'] or 0,
+            'eval_before': move_data.get('eval_before') or 0,
             'eval_diff': move_data['eval_diff'],
             'board_piece_count': len(board.piece_map()),
             'move_uci': move_data['move'].uci()
