@@ -88,6 +88,7 @@ def analyze_game(game, engine_path):
     analysis = []
 
     for i, move in enumerate(game.mainline_moves(), start=1):
+        board_piece_count = len(board.piece_map())
         info_before = engine.analyse(board, chess.engine.Limit(depth=15))
         eval_before = info_before["score"].relative.score(mate_score=10000)
         best_move = engine.play(board, chess.engine.Limit(depth=15)).move
@@ -127,7 +128,8 @@ def analyze_game(game, engine_path):
             "win_prob_after": win_prob_after,
             "win_prob_drop": win_prob_before - win_prob_after,
             "pv": pv_line,
-            "board_fen": board.fen()
+            "board_fen": board.fen(),
+            "board_piece_count": board_piece_count 
         })
 
     engine.quit()
