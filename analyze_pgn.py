@@ -95,7 +95,7 @@ def analyze_game(game, engine_path):
         pv_line = info_before.get("pv", [])
 
         player_move = move
-        move_quality = classify_move(player_move, best_move, eval_before)
+        move_quality = classify_move(player_move, best_move, eval_before) #old classification
 
         board.push(move)
         info_after = engine.analyse(board, chess.engine.Limit(depth=15)) 

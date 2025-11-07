@@ -1,43 +1,21 @@
-# create_global_data.py
-
 import chess.pgn
 import pandas as pd
 import io 
 import os
 import chess
-# Assuming analyze_game and engine_path are imported from analyze_pgn.py
 from analyze_pgn import analyze_game, engine_path 
-# You'll need the pandas library for data management
-# pip install pandas
 
+#debugging
 def safe_int_conversion(elo_raw, default_elo=1200):
-    """
-    Safely converts a raw ELO string (which might be '?', '', or 'Unrated') 
-    to an integer.
-    """
+    #converts a raw ELO string (which might be '?', '', or 'Unrated') to an integer.
     if elo_raw is None:
         return default_elo
-        
     elo_raw = str(elo_raw).strip()
-    
-    # Check if the string contains only digits (e.g., '1500')
     if elo_raw.isdigit():
         return int(elo_raw)
-    
-    # Handle common non-numeric values ('?', '-', 'Unrated', etc.)
     return default_elo 
 
 def create_global_mistakes_dataset(pgn_file_path, output_csv_path, max_games=None):
-    """
-    Analyzes all games in a PGN file, filters for mistakes/blunders,
-    and compiles the data into a single CSV for global training.
-
-    Args:
-        pgn_file_path (str): Path to the large PGN file.
-        output_csv_path (str): Path to save the resulting CSV.
-        max_games (int, optional): Limit the number of games to process 
-                                   for faster testing. Defaults to None (all games).
-    """
     all_mistakes = []
     game_count = 0
     

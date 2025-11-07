@@ -1,10 +1,8 @@
-# global_analyzer.py
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 
-# Define the GlobalAnalyzer class
 class GlobalAnalyzer:
     """
     Manages the global K-Means model trained on a large dataset of chess mistakes.

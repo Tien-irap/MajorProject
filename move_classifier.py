@@ -29,9 +29,9 @@ def classify_move_by_win_prob(player_move, best_move, eval_before, eval_after_pl
         return "Blunder"
     elif win_prob_drop > 0.15:
         return "Mistake"
-    elif win_prob_drop > 0.05:
+    elif win_prob_drop > 0.05: # A noticeable but not critical drop
         return "Inaccuracy"
-    elif win_prob_drop > 0.02: # Small drops are still good moves
+    elif win_prob_drop > 0.02: # A very small, often acceptable drop
         return "Good"
-    else: 
-        return "Excellent"
+    
+    return "Excellent" # Includes best moves and moves with negligible win prob drop
