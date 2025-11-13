@@ -1,6 +1,24 @@
+# Python stuff
 env/
-stockfish/
-*.pgn
-.DS_Store
 __pycache__/
+*.pyc
+
+# Stockfish
+stockfish/
+
+# Data
+*.pgn
 *.log
+
+# Redis
+*.rdb
+
+# --- ADD THIS LINE ---
+# Node / Frontend
+node_modules/
+# ---------------------
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
