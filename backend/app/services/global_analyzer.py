@@ -56,8 +56,7 @@ class GlobalAnalyzer:
         (from your global_mistake_features.csv).
         """
         if all_mistakes_df.empty:
-            print("Error: Global training data is empty.")
-            return
+            raise ValueError("Cannot train GlobalAnalyzer: The provided DataFrame of mistakes is empty.")
 
         # Select only the numerical features for clustering
         numerical_features = all_mistakes_df[['move_num', 'eval_before', 'eval_diff', 'board_piece_count']]

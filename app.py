@@ -9,11 +9,11 @@ import cairosvg
 import pandas as pd
 import os
 
-from analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
-from llm_analyzer import get_llm_summary_for_game # Keep for game summary
-from weakness_analysis import analyze_player_weaknesses_global, generate_llm_explanation
-from puzzle_generator import generate_puzzle_from_weakness 
-from global_analyzer import GlobalAnalyzer
+from backend.app.services.analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
+from backend.app.services.llm_analyzer import get_llm_summary_for_game # Keep for game summary
+from backend.app.services.weakness_analysis import analyze_player_weaknesses_global, generate_llm_explanation
+from backend.app.services.puzzle_generator import generate_puzzle_from_weakness 
+from backend.app.services.global_analyzer import GlobalAnalyzer
 
 # --- Streamlit App UI ---
 st.set_page_config(page_title="Chess Tutor", layout="wide")

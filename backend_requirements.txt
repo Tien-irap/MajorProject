@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+celery
+redis
+pymongo
+motor
+python-chess
+cairosvg
+Pillow
+pandas
+scikit-learn
+requests
+python-dotenv

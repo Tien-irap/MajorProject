@@ -56,8 +56,8 @@ def _create_prompt(move_data, board_before_move, move_type):
     **Position Details:**
     - **Board State (FEN):** {board_before_move.fen()}
     - **Player to Move:** {turn}
-    - **The move they played:** {move_data['move'].uci()} (Classification: {move_data['classification']})
-    - **The engine's recommended best move:** {move_data['best_move'].uci()}
+    - **The move they played:** {move_data['move']} (Classification: {move_data['classification']})
+    - **The engine's recommended best move:** {move_data['best_move']}
     - **Evaluation Change (Centipawn Loss):** {move_data['eval_diff']}
 
     **Your Task:**
@@ -75,7 +75,7 @@ def _create_weakness_prompt(profile_data, player_name):
     **Player:** {player_name}
 
     **Identified Weakness Profile:**
-    - **Profile Name:** {profile_data['profile_name']}
+    - **Profile Name:** {profile_data['global_pattern_name']}
     - **Number of Mistakes in this Category:** {profile_data['num_mistakes']}
     - **Average Severity:** {profile_data['avg_centipawn_loss']} centipawn loss
 
@@ -143,8 +143,14 @@ def get_llm_summary_for_game(analysis_data):
         
         prompt = _create_prompt(mistake, board_before, "mistake")
         explanation = _call_mistral_api(prompt, api_key) 
+
+        # Create a serializable copy of the move info
+        sanitized_move_info = mistake.copy()
+        sanitized_move_info['move'] = mistake['move']
+        sanitized_move_info['best_move'] = mistake['best_move']
+
         summary['mistakes'].append({
-            "move_info": mistake,
+            "move_info": sanitized_move_info,
             "board_before_fen": board_before.fen(),
             "explanation": explanation
         })
@@ -158,8 +164,14 @@ def get_llm_summary_for_game(analysis_data):
         
         prompt = _create_prompt(best_move_data, board_before, "best_move")
         explanation = _call_mistral_api(prompt, api_key)
+
+        # Create a serializable copy of the move info
+        sanitized_move_info = best_move_data.copy()
+        sanitized_move_info['move'] = best_move_data['move']
+        sanitized_move_info['best_move'] = best_move_data['best_move']
+
         summary['best_moves'].append({
-            "move_info": best_move_data,
+            "move_info": sanitized_move_info,
             "board_before_fen": board_before.fen(),
             "explanation": explanation
         })

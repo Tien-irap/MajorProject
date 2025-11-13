@@ -36,7 +36,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
             'eval_before': move_data.get('eval_before') or 0,
             'eval_diff': move_data['eval_diff'],
             'board_piece_count': len(board.piece_map()),
-            'move_uci': move_data['move'].uci()
+            'move_uci': move_data['move']
         })
     
     df = pd.DataFrame(features)

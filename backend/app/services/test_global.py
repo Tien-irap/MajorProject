@@ -3,9 +3,9 @@
 # --- Imports from your files ---
 import chess
 import pandas as pd
-from global_analyzer import GlobalAnalyzer # Import the class defined above
+from backend.app.services.global_analyzer import GlobalAnalyzer # Import the class defined above
 # You would also import functions from analyze_pgn.py here:
-from analyze_pgn import analyze_game, engine_path 
+from backend.app.services.analyze_pgn import analyze_game, engine_path 
 # For this example, we'll assume a dummy data source for testing
 
 # --- Your analyze_player_weaknesses_global function (from your prompt) ---

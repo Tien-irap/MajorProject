@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from PIL import Image
 import cairosvg
-from move_classifier import (
+from backend.app.services.move_classifier import (
     classify_move_by_win_prob,
     centipawns_to_win_probability
 )
@@ -117,8 +117,8 @@ def analyze_game(game, engine_path):
 
         analysis.append({
             "move_num": i,
-            "move": player_move,
-            "best_move": best_move,
+            "move": player_move.uci(),
+            "best_move": best_move.uci(),
             "eval_before": eval_before,
             "eval_after": eval_after, 
             "eval_diff": eval_diff, 
@@ -127,7 +127,7 @@ def analyze_game(game, engine_path):
             "win_prob_before": win_prob_before,
             "win_prob_after": win_prob_after,
             "win_prob_drop": win_prob_before - win_prob_after,
-            "pv": pv_line,
+            "pv": [m.uci() for m in pv_line],
             "board_fen": board.fen(),
             "board_piece_count": board_piece_count 
         })

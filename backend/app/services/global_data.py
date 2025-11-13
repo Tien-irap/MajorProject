@@ -3,7 +3,7 @@ import pandas as pd
 import io 
 import os
 import chess
-from analyze_pgn import analyze_game, engine_path 
+from backend.app.services.analyze_pgn import analyze_game, engine_path 
 
 #debugging
 def safe_int_conversion(elo_raw, default_elo=1200):
