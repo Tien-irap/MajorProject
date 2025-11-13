@@ -1,17 +1,25 @@
+import { useRef } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 interface UploadSectionProps {
-  onUpload: (file: File) => void;
+  onUpload: (file: File) => Promise<void>;
+  isLoading: boolean;
 }
 
-export const UploadSection = ({ onUpload }: UploadSectionProps) => {
+export const UploadSection = ({ onUpload, isLoading }: UploadSectionProps) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       onUpload(file);
     }
+  };
+
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -26,18 +34,20 @@ export const UploadSection = ({ onUpload }: UploadSectionProps) => {
             Upload a PGN file to analyze your chess game
           </p>
         </div>
-        <label htmlFor="file-upload">
-          <Button className="bg-gradient-gold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer">
-            Choose File
-          </Button>
-          <input
-            id="file-upload"
-            type="file"
-            accept=".pgn"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </label>
+        <Button
+          onClick={handleButtonClick}
+          disabled={isLoading}
+          className="bg-gradient-gold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
+        >
+          {isLoading ? "Uploading..." : "Choose File"}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pgn"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     </Card>
   );

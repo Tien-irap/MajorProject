@@ -1,22 +1,19 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
-const generateMockData = () => {
-  const data = [];
-  let probability = 50;
-  
-  for (let i = 0; i <= 40; i++) {
-    const variance = (Math.random() - 0.5) * 10;
-    probability = Math.max(10, Math.min(90, probability + variance));
-    data.push({
-      move: i,
-      probability: probability
-    });
-  }
-  return data;
-};
+interface MoveByMoveAnalysis {
+  move_num: number;
+  win_prob_after: number;
+}
 
-export const WinProbabilityChart = () => {
-  const data = generateMockData();
+interface ChartProps {
+  analysisData: MoveByMoveAnalysis[];
+}
+
+export const WinProbabilityChart = ({ analysisData }: ChartProps) => {
+  const data = analysisData.map(d => ({
+    move: d.move_num,
+    probability: d.win_prob_after * 100 // Convert to percentage
+  }));
 
   return (
     <div className="w-full h-[300px]">
