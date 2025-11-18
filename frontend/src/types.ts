@@ -1,46 +1,50 @@
-// --- Central Type Definitions ---
-
-/**
- * Represents the status of an analysis job.
- */
-export interface StatusResponse {
-  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
-  error?: string;
-}
-
-/**
- * Information about a single move and its evaluation.
- */
-export interface MoveInfo {
+export interface MoveAnalysis {
   move_num: number;
-  move: string;
-  eval_before: number;
-  eval_after: number;
-  eval_diff: number;
-  board_before_fen: string;
+  move: string; // SAN or UCI string
+  classification: "Blunder" | "Mistake" | "Inaccuracy" | "Good Move" | "Best Move" | "Book";
+  eval: number; // Current eval
+  eval_diff: number; // Centipawn loss
+  eval_before: number; // Eval before move
+  board_before_fen: string; // Essential for rendering the board state
+  best_move: string;
+  global_cluster?: number; // Optional: if the move was assigned a cluster ID
 }
 
-/**
- * A "key move" (like a mistake or best move) with an explanation.
- */
-export interface KeyMove {
-  move_info: MoveInfo;
+export interface WeaknessProfile {
+  global_pattern_name: string;
+  num_mistakes: number;
+  avg_centipawn_loss: number;
+  example_moves: string[]; // Array of UCI strings, e.g., ["e2e4"]
+  llm_explanation: string;
+}
+
+export interface KeyMoveSummaryItem {
+  move_info: MoveAnalysis;
   explanation: string;
 }
 
-/**
- * The final, complete analysis result for a game.
- */
 export interface AnalysisResult {
   game_headers: {
+    White: string;
+    Black: string;
     Site?: string;
-    White?: string;
-    Black?: string;
-    [key: string]: string | undefined; // Allow other headers
+    Date?: string;
+    Result?: string;
+    [key: string]: any;
   };
+  move_by_move_analysis: MoveAnalysis[];
+  
+  // The weakness report is a dictionary where keys are cluster IDs (strings)
+  weakness_report: Record<string, WeaknessProfile> | null;
+  
   key_move_summary: {
-    mistakes: KeyMove[];
-    best_moves: KeyMove[];
+    mistakes: KeyMoveSummaryItem[];
+    best_moves: KeyMoveSummaryItem[];
   };
-  move_by_move_analysis: MoveInfo[];
+}
+
+export interface StatusResponse {
+  status: "PENDING" | "STARTED" | "COMPLETED" | "FAILED";
+  error?: string;
+  analysis_id?: string;
 }

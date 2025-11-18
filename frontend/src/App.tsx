@@ -1,163 +1,285 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { UploadSection } from "./components/UploadSection";
 import { AnalysisView } from "./components/AnalysisView";
+import { ProfileCard } from "./components/ProfileCard";
+import { RuleBook } from "./components/RuleBook";
+import { WeaknessReport } from "./components/WeaknessReportView"; 
 import { ToastProvider, useToast } from "./hooks/UseToast";
-import { Loader2 } from "lucide-react";
-import type { AnalysisResult, StatusResponse } from "src/types";
+import { Loader2, LayoutDashboard, GraduationCap, ArrowLeft, Target } from "lucide-react";
+import { Button } from "./components/ui/stubs";
+import type { AnalysisResult, StatusResponse } from "./types";
 
-const API_BASE_URL = "http://localhost:8000"; // Your FastAPI backend URL
-const MAX_POLL_RETRIES = 5; // How many times to retry on a 404 before failing
-const POLL_INTERVAL_MS = 3000; // Poll every 3 seconds
+const API_BASE_URL = "http://localhost:8000"; 
+const MAX_POLL_RETRIES = 5; 
 
-// Define the states of our application for cleaner state management
-type AppState =
-  | { status: 'idle' }
-  | { status: 'uploading' }
-  | { status: 'polling'; analysisId: string }
-  | { status: 'success'; result: AnalysisResult }
-  | { status: 'error'; message: string };
-
-/**
- * Custom hook to manage the entire analysis polling lifecycle.
- * This encapsulates the complex asynchronous logic, keeping the component clean.
- */
-const useAnalysisPoller = (
-  appState: AppState,
-  setAppState: React.Dispatch<React.SetStateAction<AppState>>
-) => {
-  const { toast } = useToast();
-  const pollErrorCount = useRef(0);
-
-  useEffect(() => {
-    if (appState.status !== 'polling') {
-      return;
-    }
-
-    const analysisId = appState.analysisId;
-    let isCancelled = false;
-    let timeoutId: number;
-
-    const poll = async () => {
-      if (isCancelled) return;
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/analysis/${analysisId}/status`);
-
-        if (!response.ok) {
-          if (response.status === 404 && pollErrorCount.current < MAX_POLL_RETRIES) {
-            pollErrorCount.current++;
-            console.warn(`Job not found, retrying... (${pollErrorCount.current}/${MAX_POLL_RETRIES})`);
-            timeoutId = setTimeout(poll, POLL_INTERVAL_MS) as unknown as number;
-            return;
-          }
-          throw new Error(`Analysis failed or could not be found.`);
-        }
-
-        pollErrorCount.current = 0; // Reset error count on a successful status check
-        const data: StatusResponse = await response.json();
-
-        if (data.status === 'COMPLETED') {
-          toast("Analysis complete! Fetching results...", 'success');
-          const resultResponse = await fetch(`${API_BASE_URL}/analysis/${analysisId}`);
-          if (!resultResponse.ok) throw new Error("Failed to fetch final results.");
-          const resultData: AnalysisResult = await resultResponse.json();
-          setAppState({ status: 'success', result: resultData });
-        } else if (data.status === 'FAILED') {
-          throw new Error(data.error || "Analysis failed on the server.");
-        } else {
-          // Status is PENDING or IN_PROGRESS, so poll again
-          timeoutId = setTimeout(poll, POLL_INTERVAL_MS) as unknown as number;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "An unknown error occurred.";
-        toast(message, 'error');
-        setAppState({ status: 'error', message });
-      }
-    };
-
-    poll(); // Start the polling loop
-
-    return () => {
-      isCancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [appState, setAppState, toast]);
+// --- DUMMY PROFILE STATS (As requested) ---
+const userStats = {
+  gamesWon: 124,
+  gamesLost: 89,
+  rank: "Intermediate",
+  rating: 1450
 };
 
 function AppContent() {
-  const [appState, setAppState] = useState<AppState>({ status: 'idle' });
+  // View State: 'dashboard', 'analysis', 'weakness', 'training'
+  const [currentView, setCurrentView] = useState<'dashboard' | 'analysis' | 'weakness' | 'training'>('dashboard');
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [pollingStatus, setPollingStatus] = useState("");
+  const [pollErrorCount, setPollErrorCount] = useState(0);
   const { toast } = useToast();
 
-  // Use the custom hook to handle all polling logic
-  useAnalysisPoller(appState, setAppState);
+  // --- POLLING EFFECT ---
+  useEffect(() => {
+    if (!analysisId) return;
+    setPollErrorCount(0);
+    let intervalId: number | undefined;
 
-  const handleUpload = async (file: File) => {    
-    setAppState({ status: 'uploading' });
+    const poll = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/analysis/${analysisId}/status`);
+        
+        if (!response.ok) {
+           if (response.status === 404 && pollErrorCount < MAX_POLL_RETRIES) {
+             setPollErrorCount(prev => prev + 1);
+             setPollingStatus(`Status: Starting job... (attempt ${pollErrorCount + 1})`);
+             return; 
+           } else if (response.status === 404) {
+             throw new Error(`Analysis job not found.`);
+           } else {
+             const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+             throw new Error(errorData.detail || "Failed to get status.");
+           }
+        }
+        
+        setPollErrorCount(0);
+        const data: StatusResponse = await response.json();
+        setPollingStatus(`Status: ${data.status}...`);
+
+        if (data.status === "COMPLETED") {
+          if (intervalId) clearInterval(intervalId);
+          toast("Analysis complete! Finalizing...", 'success');
+          
+          const resultResponse = await fetch(`${API_BASE_URL}/analysis/${analysisId}`);
+           if (!resultResponse.ok) throw new Error("Failed to fetch results.");
+          
+          const resultData: AnalysisResult = await resultResponse.json();
+          setAnalysisResult(resultData);
+          setAnalysisId(null); 
+          setIsLoading(false);
+          toast("Analysis Ready! Click 'View Analysis' to see results.", 'success');
+        } else if (data.status === "FAILED") {
+          if (intervalId) clearInterval(intervalId);
+          toast(`Analysis failed: ${data.error}`, 'error');
+          setAnalysisId(null); 
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+        if (intervalId) clearInterval(intervalId);
+        setAnalysisId(null);
+        setIsLoading(false);
+        toast("An error occurred during analysis.", 'error');
+      }
+    };
+
+    poll();
+    intervalId = setInterval(poll, 3000) as unknown as number;
+    return () => { if (intervalId) clearInterval(intervalId); };
+  }, [analysisId, toast, pollErrorCount]);
+
+  const handleUpload = async (file: File) => {
+    setIsLoading(true);
+    setAnalysisResult(null); 
+    setAnalysisId(null); 
     toast("Uploading PGN file...", 'info');
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/analysis/`, { method: "POST", body: formData });
+      const response = await fetch(`${API_BASE_URL}/analysis/`, {
+        method: "POST",
+        body: formData,
+      });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
-        throw new Error(errorData.detail || "Upload failed");
-      }
+      if (!response.ok) throw new Error("Upload failed");
 
-      const data: { analysis_id: string } = await response.json();
-      toast("Upload successful! Starting analysis...", 'success');
-      setAppState({ status: 'polling', analysisId: data.analysis_id });
+      const data = await response.json();
+      toast("Upload successful! Queuing analysis...", 'success');
+      setAnalysisId(data.analysis_id); 
     } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown upload error occurred.";
-      console.error("Upload failed:", error);
-      toast(message, 'error');
-      setAppState({ status: 'error', message });
+        console.error("Upload failed:", error);
+        toast("Upload failed. Please try again.", 'error');
+        setIsLoading(false); 
     }
   };
 
-  const renderContent = () => {
-    switch (appState.status) {
-      case 'success':
-        return <AnalysisView analysis={appState.result} onStartTraining={() => toast("Training Room Coming Soon!", 'info')} />;
-      
-      case 'uploading':
-      case 'polling':
-        return (
-          <div className="flex flex-col items-center justify-center text-center p-8">
-            <Loader2 className="w-12 h-12 text-cyan-400 animate-spin mb-4" />
-            <h3 className="text-xl font-semibold text-white">Analysis in Progress</h3>
-            <p className="text-zinc-400">
-              {appState.status === 'uploading' ? 'Uploading file...' : 'Analyzing game...'}
-            </p>
+  // --- RENDER HELPERS ---
+
+  const renderDashboard = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
+      {/* Left Column: Profile & Rules */}
+      <div className="space-y-8 lg:col-span-1">
+        <ProfileCard stats={userStats} />
+        <RuleBook />
+      </div>
+
+      {/* Right Column: Action Center */}
+      <div className="lg:col-span-2 space-y-8">
+        {/* If analysis is actively loading, show spinner card */}
+        {(isLoading || analysisId) && (
+          <div className="p-12 border border-zinc-800 bg-zinc-900 rounded-lg flex flex-col items-center justify-center text-center shadow-xl">
+            <Loader2 className="w-16 h-16 text-cyan-400 animate-spin mb-6" />
+            <h3 className="text-2xl font-semibold text-white mb-2">Analyzing Your Game</h3>
+            <p className="text-zinc-400">{pollingStatus || "Initializing..."}</p>
+            <p className="text-zinc-500 text-sm mt-4">This usually takes 15-30 seconds depending on game length.</p>
           </div>
-        );
+        )}
 
-      case 'idle':
-      case 'error': // On error, we allow the user to try again.
-        return <UploadSection onUpload={handleUpload} isLoading={false} />;
-    }
-  };
-  
-  // Define custom styles
-  const bgBackground = "bg-zinc-950";
-  const textForeground = "text-white";
-  const borderBorder = "border-zinc-800";
+        {/* If not loading, show Upload or "Analysis Ready" card */}
+        {!isLoading && !analysisId && (
+          <>
+            {analysisResult ? (
+              <div className="p-8 border border-green-500/20 bg-zinc-900/50 rounded-lg flex flex-col items-center justify-center text-center shadow-xl gap-4">
+                <div className="p-4 bg-green-500/10 rounded-full mb-2">
+                   <LayoutDashboard className="w-12 h-12 text-green-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-white">Analysis Ready!</h3>
+                <p className="text-zinc-400 max-w-md">
+                  We have analyzed your game <strong>{analysisResult.game_headers.Site || "Uploaded Game"}</strong>. 
+                </p>
+                
+                <div className="flex flex-wrap justify-center gap-4 mt-4 w-full">
+                   <Button 
+                     onClick={() => setCurrentView('analysis')}
+                     className="bg-green-600 hover:bg-green-700 text-white px-6 py-6 text-lg flex-grow md:flex-grow-0"
+                   >
+                     View Move Analysis
+                   </Button>
 
+                   <Button 
+                     onClick={() => setCurrentView('weakness')}
+                     className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-6 text-lg flex-grow md:flex-grow-0"
+                   >
+                     <Target className="w-5 h-5 mr-2" />
+                     Weakness Report
+                   </Button>
+                </div>
+                
+                <Button 
+                   onClick={() => setAnalysisResult(null)}
+                   className="mt-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm"
+                 >
+                   Analyze New Game
+                 </Button>
+              </div>
+            ) : (
+              <UploadSection onUpload={handleUpload} isLoading={isLoading} />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAnalysis = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-4">
+        <Button 
+          onClick={() => setCurrentView('dashboard')} 
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+        </Button>
+        
+        <Button 
+          onClick={() => setCurrentView('weakness')} 
+          className="bg-zinc-800 hover:bg-zinc-700 text-orange-400 border border-orange-500/30"
+        >
+          <Target className="w-4 h-4 mr-2" /> See Weakness Report
+        </Button>
+      </div>
+      {analysisResult && (
+        <AnalysisView 
+          analysis={analysisResult} 
+          onStartTraining={() => setCurrentView('training')} 
+        />
+      )}
+    </div>
+  );
+
+  const renderWeaknessReport = () => (
+    <div className="space-y-6">
+       {analysisResult && (
+        <WeaknessReport 
+          analysis={analysisResult}
+          onBack={() => setCurrentView('dashboard')}
+        />
+       )}
+    </div>
+  );
+
+  const renderTraining = () => (
+    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+      <div className="flex items-center gap-4 mb-4">
+        <Button 
+          onClick={() => setCurrentView('analysis')} 
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Analysis
+        </Button>
+      </div>
+      
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 p-8 bg-zinc-900 rounded-lg border border-zinc-800">
+         <div className="p-6 bg-yellow-500/10 rounded-full">
+           <GraduationCap className="w-24 h-24 text-yellow-500" />
+         </div>
+         <h2 className="text-3xl font-bold text-white">Training Room</h2>
+         <p className="text-xl text-zinc-400 max-w-2xl">
+           Based on your analysis, we are generating custom puzzles to target your specific weaknesses.
+         </p>
+         <div className="px-4 py-2 bg-zinc-800 rounded-full text-cyan-400 font-mono text-sm">
+           Coming Soon
+         </div>
+      </div>
+    </div>
+  );
+
+  // --- MAIN RENDER ---
   return (
-    <div className={`min-h-screen ${bgBackground} ${textForeground} font-sans`}>
-      <header className={`p-4 border-b ${borderBorder}`}>
-        <h1 className={`text-2xl font-bold text-center ${textForeground}`}>♟️ AI Chess Tutor</h1>
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500/30">
+      <header className="p-4 border-b border-zinc-800 sticky top-0 bg-zinc-950/90 backdrop-blur-sm z-10 mb-8">
+        <div className="container mx-auto flex items-center justify-between">
+          <h1 
+            className="text-2xl font-bold flex items-center gap-2 cursor-pointer" 
+            onClick={() => setCurrentView('dashboard')}
+          >
+            <span className="text-3xl">♟️</span> AI Chess Tutor
+          </h1>
+          {currentView !== 'dashboard' && (
+             <Button 
+               onClick={() => setCurrentView('dashboard')}
+               className="text-xs bg-zinc-800/50 hover:bg-zinc-800"
+             >
+               Dashboard
+             </Button>
+          )}
+        </div>
       </header>
-      <main className="container mx-auto p-4 md:p-8">
-        {renderContent()}
+      
+      <main className="container mx-auto p-4 md:p-8 pb-20">
+        {currentView === 'dashboard' && renderDashboard()}
+        {currentView === 'analysis' && renderAnalysis()}
+        {currentView === 'weakness' && renderWeaknessReport()}
+        {currentView === 'training' && renderTraining()}
       </main>
     </div>
   );
 }
 
-// --- Default Export (Wraps App in Providers) ---
 export default function App() {
   return (
     <ToastProvider>

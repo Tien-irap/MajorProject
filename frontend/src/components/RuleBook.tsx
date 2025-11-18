@@ -1,6 +1,7 @@
-import { Book, ChevronRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import React from "react";
+import { Book } from "lucide-react";
+// Changed from relative path to alias path for better resolution
+import { Card, SimpleAccordionItem } from "@/components/ui/stubs";
 
 const chessRules = [
   {
@@ -30,24 +31,23 @@ const chessRules = [
 ];
 
 export const RuleBook = () => {
+  // Styles matching your theme
+  const textForeground = "text-white";
+  const textAccent = "text-cyan-400";
+  const bgGradient = "bg-zinc-900";
+  const borderBorder = "border-zinc-800";
+
   return (
-    <Card className="p-6 bg-gradient-board border-border shadow-card">
-      <h3 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
-        <Book className="w-5 h-5 text-accent" />
+    <Card className={`p-6 ${bgGradient} ${borderBorder} shadow-xl`}>
+      <h3 className={`text-xl font-semibold ${textForeground} mb-4 flex items-center gap-2`}>
+        <Book className={`w-5 h-5 ${textAccent}`} />
         Chess Rule Book
       </h3>
-      <Accordion type="single" collapsible className="w-full">
+      <div className="w-full">
         {chessRules.map((rule, index) => (
-          <AccordionItem key={index} value={`item-${index}`} className="border-border">
-            <AccordionTrigger className="text-foreground hover:text-accent transition-colors">
-              {rule.title}
-            </AccordionTrigger>
-            <AccordionContent className="text-muted-foreground">
-              {rule.content}
-            </AccordionContent>
-          </AccordionItem>
+          <SimpleAccordionItem key={index} title={rule.title} content={rule.content} />
         ))}
-      </Accordion>
+      </div>
     </Card>
   );
 };
