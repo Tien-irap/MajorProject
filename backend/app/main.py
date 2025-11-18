@@ -1,7 +1,6 @@
-# backend/app/main.py
-
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware  # <-- 1. Import the middleware
 
 # Import your core app elements
 from backend.app.core.database import db_async
@@ -32,6 +31,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Chess Analysis API",
     lifespan=lifespan
+)
+
+# --- 2. ADD CORS MIDDLEWARE ---
+# This is the fix. It must be added *after* app is created
+# and *before* you include your routers.
+origins = [
+    "http://localhost:8080",  # Your React app's address from the screenshot
+    "http://localhost",       # In case you ever serve from root
+    "http://localhost:5173",  # A common port for Vite/React, just in case
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,       # List of origins that are allowed
+    allow_credentials=True,    # Allow cookies (if you use them)
+    allow_methods=["*"],         # Allow all HTTP methods
+    allow_headers=["*"],         # Allow all headers
 )
 
 # --- INCLUDE ROUTERS ---

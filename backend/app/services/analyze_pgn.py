@@ -15,6 +15,7 @@ from backend.app.services.move_classifier import (
 engine_path = "./stockfish/stockfish-macos-m1-apple-silicon"
 
 def analyze_with_logs(game, engine_path):
+    # ... (rest of this function is unchanged) ...
     # start Stockfish subprocess
     engine = subprocess.Popen(
         engine_path,
@@ -89,15 +90,25 @@ def analyze_game(game, engine_path):
 
     for i, move in enumerate(game.mainline_moves(), start=1):
         board_piece_count = len(board.piece_map())
+        
+        # --- *** FIX IS HERE *** ---
+        # 1. Get the FEN *before* the move is pushed
+        board_before_fen = board.fen() 
+        
         info_before = engine.analyse(board, chess.engine.Limit(depth=15))
         eval_before = info_before["score"].relative.score(mate_score=10000)
         best_move = engine.play(board, chess.engine.Limit(depth=15)).move
         pv_line = info_before.get("pv", [])
 
         player_move = move
-        move_quality = classify_move(player_move, best_move, eval_before) #old classification
-
+        
+        # 2. Push the move
         board.push(move)
+        
+        # 3. Get the FEN *after* the move
+        board_after_fen = board.fen()
+        
+        # (Rest of the analysis)
         info_after = engine.analyse(board, chess.engine.Limit(depth=15)) 
         eval_after = info_after["score"].relative.score(mate_score=10000)
         eval_diff = None
@@ -115,6 +126,7 @@ def analyze_game(game, engine_path):
         win_prob_before = centipawns_to_win_probability(eval_before)
         win_prob_after = centipawns_to_win_probability(eval_after_player)
 
+        # 4. Add the correct key to the dictionary
         analysis.append({
             "move_num": i,
             "move": player_move.uci(),
@@ -128,7 +140,9 @@ def analyze_game(game, engine_path):
             "win_prob_after": win_prob_after,
             "win_prob_drop": win_prob_before - win_prob_after,
             "pv": [m.uci() for m in pv_line],
-            "board_fen": board.fen(),
+            "board_fen": board_before_fen,
+            "board_before_fen": board_before_fen, # FEN before the move was made
+            "board_after_fen": board_after_fen,
             "board_piece_count": board_piece_count 
         })
 
@@ -139,6 +153,7 @@ def analyze_game(game, engine_path):
 
 # Convert board to image to FEN
 def render_board_svg(fen):
+    # ... (rest of this function is unchanged) ...
     board = chess.Board(fen)
     svg = chess.svg.board(board, size=400)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
@@ -147,6 +162,7 @@ def render_board_svg(fen):
 
 # Simple classification 
 def classify_move(player_move, best_move, centipawn_loss):
+    # ... (rest of this function is unchanged) ...
     if player_move == best_move:
         return "Best Move"  # A positive value means a drop in evaluation.
     
@@ -159,4 +175,4 @@ def classify_move(player_move, best_move, centipawn_loss):
             return "Mistake"
         else:
             return "Blunder"
-    return "Unknown"
+   

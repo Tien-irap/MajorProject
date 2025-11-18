@@ -1,6 +1,7 @@
 import requests
 import chess
 import os
+import time  # <-- 1. Import the 'time' module
 from dotenv import load_dotenv
 
 # --- Configuration ---
@@ -28,6 +29,9 @@ def _call_mistral_api(prompt, api_key):
         response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
     except requests.exceptions.RequestException as e:
+        # Handle 429 specifically for better error messages
+        if hasattr(e, 'response') and e.response.status_code == 429:
+            return "Error: Mistral API rate limit hit. Please wait a moment."
         return f"Error calling Mistral API: {e}"
 
 def _create_prompt(move_data, board_before_move, move_type):
@@ -49,16 +53,17 @@ def _create_prompt(move_data, board_before_move, move_type):
         3.  **Provide a Key Takeaway:** Give a one-sentence lesson about the pattern or idea behind this move.
         """
 
+    # --- Use .get() for all dictionary access to prevent crashes ---
     prompt = f"""
     You are an expert chess coach speaking to a beginner or intermediate player. Your tone is encouraging and educational.
     Analyze the following chess move from a game.
 
     **Position Details:**
     - **Board State (FEN):** {board_before_move.fen()}
-    - **Player to Move:** {turn}
-    - **The move they played:** {move_data['move']} (Classification: {move_data['classification']})
-    - **The engine's recommended best move:** {move_data['best_move']}
-    - **Evaluation Change (Centipawn Loss):** {move_data['eval_diff']}
+    - **Player to Move:** {turn} 
+    - **The move they played:** {move_data.get('move', 'N/A')} (Classification: {move_data.get('classification', 'N/A')})
+    - **The engine's recommended best move:** {move_data.get('best_move', 'N/A')}
+    - **Evaluation Change (Centipawn Loss):** {move_data.get('eval_diff', 'N/A')}
 
     **Your Task:**
     {task_description}
@@ -98,16 +103,16 @@ def get_llm_weakness_summary(weakness_profiles, player_name="Player"):
     if not api_key:
         return {"error": "Mistral API key not found."}
 
-    # This will store the LLM explanation inside the original profile data
     explained_profiles = {}
     for profile_key, profile_data in weakness_profiles.items():
         prompt = _create_weakness_prompt(profile_data, player_name)
         explanation = _call_mistral_api(prompt, api_key)
 
-        # Add the explanation to the profile
         new_profile_data = profile_data.copy()
         new_profile_data["llm_explanation"] = explanation
         explained_profiles[profile_key] = new_profile_data
+        
+        time.sleep(1) # <-- 2. Add a 1-second delay to this loop too
 
     return explained_profiles
 
@@ -123,57 +128,57 @@ def get_llm_summary_for_game(analysis_data):
     summary = {}
     
     mistakes = sorted(
-        [m for m in analysis_data if m['classification'] in ["Blunder", "Mistake"]],
-        key=lambda x: x['eval_diff'],
+        [m for m in analysis_data if m.get('classification') in ["Blunder", "Mistake"]],
+        key=lambda x: x.get('eval_diff') if x.get('eval_diff') is not None else 0, 
         reverse=True
     )
     
     best_moves = sorted(
-        [m for m in analysis_data if m['classification'] == "Best Move"],
-        key=lambda x: x['eval_before'] if x['eval_before'] is not None else 0,
+        [m for m in analysis_data if m.get('classification') == "Best Move"],
+        key=lambda x: x.get('eval_before') if x.get('eval_before') is not None else 0, 
         reverse=True
     )
 
     summary['mistakes'] = []
-    for i, mistake in enumerate(mistakes[:10]): 
-        move_num = mistake['move_num']
-        board_before = chess.Board() # Default to starting position
-        if move_num > 1:
-            board_before = chess.Board(analysis_data[move_num - 2]['board_fen'])
+    for i, mistake_data in enumerate(mistakes[:10]): 
         
-        prompt = _create_prompt(mistake, board_before, "mistake")
+        board_before_fen_str = mistake_data.get("board_before_fen") 
+        if not board_before_fen_str:
+            board_before = chess.Board() 
+        else:
+            board_before = chess.Board(board_before_fen_str)
+
+        prompt = _create_prompt(mistake_data, board_before, "mistake")
         explanation = _call_mistral_api(prompt, api_key) 
 
-        # Create a serializable copy of the move info
-        sanitized_move_info = mistake.copy()
-        sanitized_move_info['move'] = mistake['move']
-        sanitized_move_info['best_move'] = mistake['best_move']
-
+        sanitized_move_info = mistake_data.copy()
+        
         summary['mistakes'].append({
             "move_info": sanitized_move_info,
-            "board_before_fen": board_before.fen(),
             "explanation": explanation
         })
+        
+        time.sleep(1)  # <-- 3. Add a 1-second delay *after* each API call
 
     summary['best_moves'] = []
     for i, best_move_data in enumerate(best_moves[:10]): 
-        move_num = best_move_data['move_num']
-        board_before = chess.Board() # Default to starting position
-        if move_num > 1:
-            board_before = chess.Board(analysis_data[move_num - 2]['board_fen'])
+        
+        board_before_fen_str = best_move_data.get("board_before_fen") 
+        if not board_before_fen_str:
+            board_before = chess.Board() 
+        else:
+            board_before = chess.Board(board_before_fen_str)
         
         prompt = _create_prompt(best_move_data, board_before, "best_move")
         explanation = _call_mistral_api(prompt, api_key)
 
-        # Create a serializable copy of the move info
         sanitized_move_info = best_move_data.copy()
-        sanitized_move_info['move'] = best_move_data['move']
-        sanitized_move_info['best_move'] = best_move_data['best_move']
 
         summary['best_moves'].append({
             "move_info": sanitized_move_info,
-            "board_before_fen": board_before.fen(),
             "explanation": explanation
         })
+        
+        time.sleep(1)  # <-- 4. Add a 1-second delay *after* each API call
 
     return summary
