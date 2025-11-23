@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware  # <-- 1. Import the middlewa
 # Import your core app elements
 from backend.app.core.database import db_async
 from backend.app.routes import analysis_routes
+from backend.app.routes import GenPuzzle
 
 # --- LIFESPAN (Startup & Shutdown) ---
 @asynccontextmanager
@@ -55,7 +56,12 @@ app.add_middleware(
 app.include_router(
     analysis_routes.router,
     prefix="/analysis",  # This adds /analysis to all routes in that file
-    tags=["Analysis"]     # Groups them nicely in the /docs
+    tags=["Analysis"],     # Groups them nicely in the /docs
+)
+app.include_router(
+    GenPuzzle.router,
+    prefix="/genpuzzle",
+    tags=["GenPuzzle"]
 )
 
 # A simple root endpoint to check if the API is running

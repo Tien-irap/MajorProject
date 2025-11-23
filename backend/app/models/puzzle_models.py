@@ -21,6 +21,7 @@ class PuzzleDB(BaseModel):
     solution: List[str]
     theme: str
     generator_type: str # 'seed' or 'evolutionary'
+    difficulty_level: int = 1
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:

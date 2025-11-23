@@ -4,10 +4,11 @@ import { AnalysisView } from "./components/AnalysisView";
 import { ProfileCard } from "./components/ProfileCard";
 import { RuleBook } from "./components/RuleBook";
 import { WeaknessReport } from "./components/WeaknessReportView"; 
+import { EvolutionaryTrainingRoom } from "./components/EvolutionaryTrainingRoom";
 import { ToastProvider, useToast } from "./hooks/UseToast";
 import { Loader2, LayoutDashboard, GraduationCap, ArrowLeft, Target } from "lucide-react";
 import { Button } from "./components/ui/stubs";
-import type { AnalysisResult, StatusResponse } from "./types";
+import type { AnalysisResult, StatusResponse, PuzzleDB, SubmitPuzzleResult } from "./types";
 
 const API_BASE_URL = "http://localhost:8000"; 
 const MAX_POLL_RETRIES = 5; 
@@ -29,6 +30,8 @@ function AppContent() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [pollingStatus, setPollingStatus] = useState("");
   const [pollErrorCount, setPollErrorCount] = useState(0);
+  const [puzzles, setPuzzles] = useState<PuzzleDB[]>([]);
+  const [isGeneratingPuzzles, setIsGeneratingPuzzles] = useState(false);
   const { toast } = useToast();
 
   // --- POLLING EFFECT ---
@@ -94,6 +97,7 @@ function AppContent() {
     setIsLoading(true);
     setAnalysisResult(null); 
     setAnalysisId(null); 
+    setPuzzles([]); // Clear previous puzzles
     toast("Uploading PGN file...", 'info');
 
     const formData = new FormData();
@@ -114,6 +118,67 @@ function AppContent() {
         console.error("Upload failed:", error);
         toast("Upload failed. Please try again.", 'error');
         setIsLoading(false); 
+    }
+  };
+
+  const handleGeneratePuzzles = async (fen: string, moveUci: string, difficultyLevel: number = 1) => {
+    setIsGeneratingPuzzles(true);
+    toast("Generating evolutionary puzzles...", 'info');
+    
+    console.log("=== Generating Puzzles ===");
+    console.log("Request payload:", { fen, move_uci: moveUci, difficulty_level: difficultyLevel });
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/genpuzzle/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fen,
+          move_uci: moveUci,
+          difficulty_level: difficultyLevel,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+        throw new Error(errorData.detail || "Failed to generate puzzles");
+      }
+
+      const puzzleData: PuzzleDB[] = await response.json();
+      console.log("Generated puzzles:", puzzleData);
+      
+      setPuzzles(puzzleData);
+      setCurrentView('training');
+      toast(`Generated ${puzzleData.length} tactical puzzles!`, 'success');
+    } catch (error) {
+      console.error("Puzzle generation failed:", error);
+      toast(`Failed to generate puzzles: ${error instanceof Error ? error.message : "Unknown error"}`, 'error');
+    } finally {
+      setIsGeneratingPuzzles(false);
+    }
+  };
+
+  const handleSubmitPuzzleResult = async (result: SubmitPuzzleResult) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/genpuzzle/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(result),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to submit result");
+      }
+
+      const data = await response.json();
+      console.log("Result submitted:", data);
+    } catch (error) {
+      console.error("Failed to submit puzzle result:", error);
+      // Don't show error toast to user as this is background submission
     }
   };
 
@@ -205,7 +270,7 @@ function AppContent() {
       {analysisResult && (
         <AnalysisView 
           analysis={analysisResult} 
-          onStartTraining={() => setCurrentView('training')} 
+          onStartTraining={(fen, moveUci) => handleGeneratePuzzles(fen, moveUci, 1)} 
         />
       )}
     </div>
@@ -224,27 +289,12 @@ function AppContent() {
 
   const renderTraining = () => (
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex items-center gap-4 mb-4">
-        <Button 
-          onClick={() => setCurrentView('analysis')} 
-          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Analysis
-        </Button>
-      </div>
-      
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 p-8 bg-zinc-900 rounded-lg border border-zinc-800">
-         <div className="p-6 bg-yellow-500/10 rounded-full">
-           <GraduationCap className="w-24 h-24 text-yellow-500" />
-         </div>
-         <h2 className="text-3xl font-bold text-white">Training Room</h2>
-         <p className="text-xl text-zinc-400 max-w-2xl">
-           Based on your analysis, we are generating custom puzzles to target your specific weaknesses.
-         </p>
-         <div className="px-4 py-2 bg-zinc-800 rounded-full text-cyan-400 font-mono text-sm">
-           Coming Soon
-         </div>
-      </div>
+      <EvolutionaryTrainingRoom
+        puzzles={puzzles}
+        onBack={() => setCurrentView('analysis')}
+        onSubmitResult={handleSubmitPuzzleResult}
+        isLoading={isGeneratingPuzzles}
+      />
     </div>
   );
 

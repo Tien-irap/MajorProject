@@ -48,3 +48,27 @@ export interface StatusResponse {
   error?: string;
   analysis_id?: string;
 }
+
+// --- Evolutionary Puzzle Types ---
+export interface PuzzleDB {
+  _id: string;
+  fen: string;
+  solution: string[];
+  theme: string;
+  generator_type: "seed" | "evolutionary";
+  difficulty_level?: number;
+  created_at?: string;
+}
+
+export interface GeneratePuzzleRequest {
+  fen: string;
+  move_uci: string;
+  difficulty_level: number;
+}
+
+export interface SubmitPuzzleResult {
+  puzzle_id: string;
+  user_id: string;
+  is_correct: boolean;
+  time_taken_seconds: number;
+}

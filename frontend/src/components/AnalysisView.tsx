@@ -6,7 +6,7 @@ import type { AnalysisResult } from "src/types"; // Adjusted path
 
 interface AnalysisViewProps {
   analysis: AnalysisResult;
-  onStartTraining: () => void;
+  onStartTraining: (fen: string, moveUci: string) => void;
 }
 
 export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) => {
@@ -35,13 +35,35 @@ export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) =
     bestMoves: analysis.key_move_summary.best_moves ?? [],
   }), [analysis.key_move_summary]);
 
+  // Find the first mistake to use as the seed for puzzle generation
+  const firstMistake = mistakes.length > 0 ? mistakes[0] : null;
+
+  const handleStartTraining = () => {
+    if (firstMistake) {
+      // Use the FEN before the mistake and the move that was played
+      const fen = firstMistake.move_info.board_before_fen;
+      const moveUci = firstMistake.move_info.move; // This should be UCI format
+      
+      console.log("=== Starting Training ===");
+      console.log("FEN:", fen);
+      console.log("Move:", moveUci);
+      console.log("Mistake details:", firstMistake);
+      
+      onStartTraining(fen, moveUci);
+    } else {
+      // Fallback: if no mistakes, we can't generate puzzles
+      console.warn("No mistakes found to generate puzzles from");
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <h2 className={`text-2xl font-bold ${textForeground} truncate`}>Game Analysis: {gameName}</h2>
         <Button 
-          onClick={onStartTraining}
-          className={`${gradientGold} ${textPrimaryForeground} font-semibold hover:opacity-90 transition-opacity w-full sm:w-auto flex-shrink-0`}
+          onClick={handleStartTraining}
+          disabled={!firstMistake}
+          className={`${gradientGold} ${textPrimaryForeground} font-semibold hover:opacity-90 transition-opacity w-full sm:w-auto flex-shrink-0 ${!firstMistake ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Enter Training Room
           <ArrowRight className="ml-2 w-4 h-4" />
