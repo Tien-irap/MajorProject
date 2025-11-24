@@ -1,6 +1,7 @@
 from typing import List
 from backend.app.core.database import db_async
 from backend.app.models.puzzle_models import PuzzleDB, UserTrainingHistory
+from backend.app.core.logger import logger
 
 class TrainingRepository:
     """
@@ -23,13 +24,16 @@ class TrainingRepository:
         Saves a batch of generated puzzles to MongoDB.
         """
         if not puzzles:
+            logger.warning("No puzzles to save")
             return []
 
+        logger.debug(f"Saving {len(puzzles)} puzzles to database")
         # Convert Pydantic models to dicts for MongoDB
         # by_alias=True ensures '_id' is used instead of 'id'
         puzzles_dict = [p.model_dump(by_alias=True) for p in puzzles]
         
         result = await self.db["puzzles"].insert_many(puzzles_dict)
+        logger.info(f"Successfully saved {len(result.inserted_ids)} puzzles")
         
         return [str(id) for id in result.inserted_ids]
 
@@ -37,8 +41,10 @@ class TrainingRepository:
         """
         Records a user's attempt (Success/Fail/Time) for RL processing.
         """
+        logger.debug(f"Recording attempt for puzzle {attempt.puzzle_id} by user {attempt.user_id}")
         attempt_dict = attempt.model_dump(by_alias=True)
         result = await self.db["training_history"].insert_one(attempt_dict)
+        logger.info(f"Training attempt recorded with ID: {result.inserted_id}")
         return str(result.inserted_id)
 
     async def get_puzzle_by_id(self, puzzle_id: str) -> dict:

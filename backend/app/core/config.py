@@ -19,5 +19,8 @@ class Settings:
     
     # API Keys
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
+    
+    # Logging
+    LOGGER: int = int(os.getenv("LOGGER", "20"))  # 10=DEBUG, 20=INFO, 30=WARNING, 40=ERROR
 
 settings = Settings()

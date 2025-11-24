@@ -9,6 +9,7 @@ from fastapi import (
     Request
 )
 from motor.motor_asyncio import AsyncIOMotorCollection
+import hashlib
 
 # Import your helper functions, models, and repo
 from ..repos import analyze_repo
@@ -18,6 +19,7 @@ from ..models.analysis_model import (
     AnalysisStatusResponse, 
     validate_object_id
 )
+from ..core.logger import logger
 
 # --- CREATE ROUTER ---
 router = APIRouter()
@@ -46,6 +48,8 @@ async def create_analysis_job(
     
     Accepts a PGN file, creates a "PENDING" job in MongoDB,
     starts the background Celery task, and returns the job ID.
+    
+    Optimization: Caches analysis by PGN content hash to avoid reprocessing.
     """
     if not file.filename.endswith(".pgn"):
         raise HTTPException(
@@ -55,14 +59,33 @@ async def create_analysis_job(
         
     pgn_string = (await file.read()).decode("utf-8")
     
-    # USE THE REPO
-    analysis_id = await analyze_repo.create_job_async(collection)
+    # Calculate hash of PGN content for caching
+    pgn_hash = hashlib.sha256(pgn_string.encode()).hexdigest()
+    
+    # Check if this exact PGN has been analyzed before
+    cached_analysis = await collection.find_one({
+        "pgn_hash": pgn_hash,
+        "status": "COMPLETED"
+    })
+    
+    if cached_analysis:
+        logger.info(f"Cache hit - returning existing analysis for hash: {pgn_hash[:16]}...")
+        return AnalysisCreateResponse(
+            analysis_id=str(cached_analysis["_id"]),
+            status="COMPLETED",
+            message="Analysis already exists. Returning cached result."
+        )
+    
+    # No cache hit - create new job
+    logger.info(f"Cache miss - creating new analysis job for hash: {pgn_hash[:16]}...")
+    analysis_id = await analyze_repo.create_job_async(collection, pgn_hash=pgn_hash)
 
     # CALL THE TASK BY ITS NAME
     celery_app.send_task(
         "backend.app.tasks.celery_worker.run_chess_analysis",
         args=[analysis_id, pgn_string]
     )
+    logger.info(f"Analysis job {analysis_id} queued for processing")
     
     return AnalysisCreateResponse(
         analysis_id=analysis_id, 

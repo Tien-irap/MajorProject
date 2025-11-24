@@ -1,8 +1,9 @@
 import requests
 import chess
 import os
-import time  # <-- 1. Import the 'time' module
+import time
 from dotenv import load_dotenv
+from backend.app.core.logger import logger
 
 # --- Configuration ---
 API_URL = "https://api.mistral.ai/v1/chat/completions"

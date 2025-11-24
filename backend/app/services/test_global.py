@@ -7,6 +7,7 @@ from backend.app.services.global_analyzer import GlobalAnalyzer # Import the cla
 # You would also import functions from analyze_pgn.py here:
 from backend.app.services.analyze_pgn import analyze_game, engine_path 
 # For this example, we'll assume a dummy data source for testing
+from backend.app.core.logger import logger
 
 # --- Your analyze_player_weaknesses_global function (from your prompt) ---
 def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name="Player"):
@@ -16,7 +17,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
     ]
 
     if not mistakes_data:
-        print("No mistakes found to perform analysis.")
+        logger.warning("No mistakes found to perform analysis.")
         return None
 
     # 1. Feature Extraction: Create a dataset of mistakes
@@ -53,7 +54,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
 
     # 3. Interpretation: Analyze and describe each cluster
     summary = {}
-    print(f"--- Global Weakness Analysis Report for {player_name} ---")
+    logger.info(f"Generating Global Weakness Analysis Report for {player_name}")
     
     for i in range(global_analyzer.n_clusters):
         cluster_df = df[df['global_cluster'] == i]
@@ -85,10 +86,10 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
         summary[f"Global Weakness Profile {i+1}"] = cluster_summary
 
         # Print the summary
-        print(f"\n## Global Weakness Profile {i+1}: {global_description}")
-        print(f"   - Mistakes of this type in your game: {cluster_summary['num_mistakes']}")
-        print(f"   - Your Average Severity: {cluster_summary['avg_centipawn_loss']} centipawn loss")
-        print(f"   - Example Moves: {', '.join(cluster_summary['example_moves'][:3])}...")
+        logger.debug(f"Global Weakness Profile {i+1}: {global_description}")
+        logger.debug(f"Mistakes of this type: {cluster_summary['num_mistakes']}")
+        logger.debug(f"Average Severity: {cluster_summary['avg_centipawn_loss']} centipawn loss")
+        logger.debug(f"Example Moves: {', '.join(cluster_summary['example_moves'][:3])}...")
 
     return summary
 
@@ -115,7 +116,7 @@ def generate_llm_explanation(cluster_summary):
     """
     
     # In production, you would call your LLM API here.
-    print(f"\n[LLM Explanation for {llm_context['global_pattern'].split(':')[0]} generated...]")
+    logger.debug(f"LLM Explanation generated for {llm_context['global_pattern'].split(':')[0]}")
     # Placeholder for the actual LLM output
     llm_output = f"Your primary weakness, **{llm_context['global_pattern'].split(':')[0]}**, is a common issue where you miss immediate, simple threats. Your mistakes of this type are relatively severe, averaging a {llm_context['avg_severity']} centipawn loss, and tend to happen during the **{ 'Opening' if llm_context['avg_move_num'] < 15 else 'Middlegame'}** when the position is still quite **complex** ({llm_context['avg_complexity']} pieces). These errors indicate you may be over-focused on your own plans and missing your opponent's direct threats. To fix this, dedicate 15 minutes a day to solving **simple tactical puzzles** like **forks and pins** on platforms like Lichess or Chess.com, ensuring you check for opponent's checks, captures, and threats (the 'blunder check') before every move. Keep it up! 🚀"
     
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     try:
         global_df = pd.read_csv(GLOBAL_DATA_PATH)
     except FileNotFoundError:
-        print(f"🚨 WARNING: Global data not found at {GLOBAL_DATA_PATH}. Using dummy data for demo.")
+        logger.warning(f"Global data not found at {GLOBAL_DATA_PATH}. Using dummy data for demo.")
         # Create a dummy dataframe with the expected features
         global_df = pd.DataFrame({
             'move_num': [10, 25, 40, 15, 30, 45, 12, 38],
@@ -172,10 +173,10 @@ if __name__ == "__main__":
 
     # --- STEP 4: Generate LLM Explanations ---
     if weakness_summary:
-        print("\n" + "="*50)
-        print("LLM Explanation Section")
-        print("="*50)
+        logger.info("="*50)
+        logger.info("LLM Explanation Section")
+        logger.info("="*50)
         
         for profile_name, summary in weakness_summary.items():
             llm_explanation = generate_llm_explanation(summary)
-            print(f"\n{profile_name} LLM Feedback:\n{llm_explanation}")
+            logger.info(f"{profile_name} LLM Feedback:\n{llm_explanation}")

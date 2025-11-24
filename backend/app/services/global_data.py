@@ -4,6 +4,7 @@ import io
 import os
 import chess
 from backend.app.services.analyze_pgn import analyze_game, engine_path 
+from backend.app.core.logger import logger 
 
 #debugging
 def safe_int_conversion(elo_raw, default_elo=1200):
@@ -33,7 +34,7 @@ def create_global_mistakes_dataset(pgn_file_path, output_csv_path, max_games=Non
                 break
                 
             game_count += 1
-            print(f"Analyzing Game {game_count}...")
+            logger.info(f"Analyzing Game {game_count}...")
             
             try:
                 # 1. Safely extract ELO ratings from game headers
@@ -68,7 +69,7 @@ def create_global_mistakes_dataset(pgn_file_path, output_csv_path, max_games=Non
                         })
 
             except Exception as e:
-                print(f"Error processing game {game_count}: {e}")
+                logger.error(f"Error processing game {game_count}: {e}")
                 continue
                 
     # Convert the collected list of mistake features into a DataFrame
@@ -76,8 +77,8 @@ def create_global_mistakes_dataset(pgn_file_path, output_csv_path, max_games=Non
     
     # Save the resulting DataFrame to a CSV file
     global_df.to_csv(output_csv_path, index=False)
-    print(f"\n✅ Successfully processed {game_count} games.")
-    print(f"   Saved {len(global_df)} mistakes/blunders to {output_csv_path}")
+    logger.info(f"Successfully processed {game_count} games.")
+    logger.info(f"Saved {len(global_df)} mistakes/blunders to {output_csv_path}")
     
 # --- Execution Block ---
 if __name__ == "__main__":
@@ -91,6 +92,6 @@ if __name__ == "__main__":
     # 2. Ensure the output directory exists
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
-    print(f"Saving data to: {os.path.abspath(OUTPUT_CSV)}")
+    logger.info(f"Saving data to: {os.path.abspath(OUTPUT_CSV)}")
     
     create_global_mistakes_dataset(INPUT_PGN, OUTPUT_CSV, max_games=100) 

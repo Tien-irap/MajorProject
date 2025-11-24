@@ -3,6 +3,7 @@ import chess.engine
 import copy
 import os
 from typing import List, Dict, Any, Optional
+from backend.app.core.logger import logger
 
 class GeneticPuzzleGenerator:
     """
@@ -39,8 +40,14 @@ class GeneticPuzzleGenerator:
         """
         try:
             new_board = board.transform(chess.flip_horizontal)
+            
+            # Validate the resulting board is legal
+            if not new_board.is_valid():
+                return None
+                
             return new_board
-        except Exception:
+        except Exception as e:
+            logger.error(f"Mirror mutation error: {e}")
             return None
 
     def _mutate_shift(self, board: chess.Board, direction: str) -> Optional[chess.Board]:
@@ -67,8 +74,17 @@ class GeneticPuzzleGenerator:
             new_square = chess.square(new_file, rank_idx)
             new_board.set_piece_at(new_square, piece)
             
+        # Copy game state
         new_board.turn = board.turn
         new_board.castling_rights = chess.BB_EMPTY # Shifting usually breaks castling
+        new_board.ep_square = None # En passant is no longer valid after shifting
+        new_board.halfmove_clock = 0
+        new_board.fullmove_number = board.fullmove_number
+        
+        # Validate the board has required pieces and is legal
+        if not new_board.is_valid():
+            return None
+            
         return new_board
 
     # --- FITNESS FUNCTION (The "Natural Selection") ---
@@ -102,7 +118,7 @@ class GeneticPuzzleGenerator:
             
             return 1 # The organism survives
         except Exception as e:
-            print(f"Fitness calculation error: {e}")
+            logger.error(f"Fitness calculation error: {e}")
             return 0
 
     # --- MAIN GENERATION LOOP ---
@@ -131,7 +147,7 @@ class GeneticPuzzleGenerator:
                 self._stop_engine()
                 return [] # Score unavailable
         except Exception as e:
-            print(f"Error analyzing seed position: {e}")
+            logger.error(f"Error analyzing seed position: {e}")
             self._stop_engine()
             return [] # Seed was bad
 
@@ -151,13 +167,13 @@ class GeneticPuzzleGenerator:
             ("shift", "right")
         ]
 
-        print(f"🧬 Starting mutations for seed: {seed_fen[:50]}...")
+        logger.info(f"Starting mutations for seed FEN")
         
         for m_type, direction in mutations_to_try:
             if len(generated_puzzles) > num_variations:
                 break
 
-            print(f"  Attempting {m_type} mutation {f'({direction})' if direction else ''}...")
+            logger.debug(f"Attempting {m_type} mutation {f'({direction})' if direction else ''}")
             
             mutated_board = None
             if m_type == "mirror":
@@ -166,14 +182,14 @@ class GeneticPuzzleGenerator:
                 mutated_board = self._mutate_shift(seed_board, direction)
             
             if not mutated_board:
-                print(f"    ❌ Mutation failed: Board became invalid")
+                logger.warning(f"Mutation {m_type} failed: Board became invalid")
                 continue
             
-            print(f"    ✓ Mutation created, testing fitness...")
+            logger.debug(f"Mutation {m_type} created successfully, testing fitness")
 
             # 3. Check Fitness
             fitness = self._calculate_fitness(mutated_board, score)
-            print(f"    Fitness score: {fitness}")
+            logger.debug(f"Fitness score for {m_type}: {fitness}")
             
             if fitness == 1:
                     # 4. Selection: It survived, add to population
@@ -197,13 +213,13 @@ class GeneticPuzzleGenerator:
                             "generator_type": "evolutionary",
                             "eval_score": mut_score
                         })
-                        print(f"    ✅ {m_type.capitalize()} mutation SURVIVED and added!")
+                        logger.info(f"{m_type.capitalize()} mutation SURVIVED and added to puzzle set")
                     except Exception as e:
-                        print(f"    ❌ Error analyzing mutated position ({m_type}): {e}")
+                        logger.error(f"Error analyzing mutated position ({m_type}): {e}")
                         continue # Skip this mutation
             else:
-                print(f"    ❌ Fitness test FAILED - mutation died")
+                logger.debug(f"Fitness test FAILED for {m_type} - mutation eliminated")
 
         self._stop_engine()
-        print(f"🎯 Total puzzles generated: {len(generated_puzzles)}")
+        logger.info(f"Puzzle generation complete: {len(generated_puzzles)} total puzzles")
         return generated_puzzles

@@ -4,6 +4,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo.collection import Collection as PyMongoCollection
 from typing import Dict, Any
+from backend.app.core.logger import logger
 
 # --- Helper ---
 def _validate_object_id(job_id: str) -> ObjectId:
@@ -16,12 +17,24 @@ def _validate_object_id(job_id: str) -> ObjectId:
 # ASYNC Functions (for FastAPI / main.py)
 # ==========================================================
 
-async def create_job_async(collection: AsyncIOMotorCollection) -> str:
+async def create_job_async(collection: AsyncIOMotorCollection, pgn_hash: str = None) -> str:
     """
     Creates a new analysis job document with 'PENDING' status.
     Returns the new job's ID as a string.
+    
+    Args:
+        collection: MongoDB collection
+        pgn_hash: SHA256 hash of PGN content for caching (optional)
     """
-    new_job = {"status": "PENDING", "result": None, "error": None}
+    new_job = {
+        "status": "PENDING", 
+        "result": None, 
+        "error": None
+    }
+    
+    if pgn_hash:
+        new_job["pgn_hash"] = pgn_hash
+    
     result = await collection.insert_one(new_job)
     return str(result.inserted_id)
 

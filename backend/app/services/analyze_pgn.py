@@ -9,6 +9,7 @@ from backend.app.services.move_classifier import (
     classify_move_by_win_prob,
     centipawns_to_win_probability
 )
+from backend.app.core.logger import logger
 
 
 # Path to the Stockfish executable

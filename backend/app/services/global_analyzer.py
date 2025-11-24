@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import numpy as np
+from backend.app.core.logger import logger
 
 class GlobalAnalyzer:
     """
@@ -65,7 +66,7 @@ class GlobalAnalyzer:
         scaled_features = self.scaler.fit_transform(numerical_features)
 
         # 2. K-Means Clustering: Group the global mistakes
-        print(f"Training K-Means model with {len(all_mistakes_df)} mistakes...")
+        logger.info(f"Training K-Means model with {len(all_mistakes_df)} mistakes...")
         self.kmeans.fit(scaled_features)
         self.is_trained = True
 
@@ -80,10 +81,10 @@ class GlobalAnalyzer:
             center_data = original_centers_df.iloc[i]
             description = self._interpret_cluster_center(center_data)
             self.global_profile_descriptions[i] = description
-            print(f"Cluster {i} Description: {description}")
-            
-        print("✅ Global Analyzer trained and profiles established.")
-
+            logger.debug(f"Cluster {i} Description: {description}")
+        
+        logger.info("Global Analyzer trained and profiles established.")
+    
     def analyze_user_mistakes(self, user_mistakes_df):
         """
         Scales and predicts the cluster for a user's mistakes using the

@@ -1,6 +1,8 @@
 # The GlobalAnalyzer class must be defined/imported before this function.
 import chess
 import pandas as pd
+from backend.app.core.logger import logger
+
 def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name="Player"):
     """
     Analyzes a player's mistakes by classifying them using the global weakness profiles.
@@ -18,7 +20,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
     ]
 
     if not mistakes_data:
-        print("No mistakes found to perform analysis.")
+        logger.warning("No mistakes found to perform analysis.")
         return None
 
     # 1. Feature Extraction: Create a dataset of mistakes
@@ -46,7 +48,7 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
 
     # 3. Interpretation: Analyze and describe each cluster
     summary = {}
-    print(f"--- Global Weakness Analysis Report for {player_name} ---")
+    logger.info(f"Generating Global Weakness Analysis Report for {player_name}")
     
     for i in range(global_analyzer.n_clusters):
         cluster_df = df[df['global_cluster'] == i]
@@ -79,10 +81,10 @@ def analyze_player_weaknesses_global(analysis_data, global_analyzer, player_name
         summary[f"Global Weakness Profile {i+1}"] = cluster_summary
 
         # Print the summary
-        print(f"\n## Global Weakness Profile {i+1}: {global_description}")
-        print(f"   - Mistakes of this type in your game: {cluster_summary['num_mistakes']}")
-        print(f"   - Your Average Severity: {cluster_summary['avg_centipawn_loss']} centipawn loss")
-        print(f"   - Example Moves: {', '.join(cluster_summary['example_moves'][:3])}...")
+        logger.debug(f"Global Weakness Profile {i+1}: {global_description}")
+        logger.debug(f"Mistakes of this type: {cluster_summary['num_mistakes']}")
+        logger.debug(f"Average Severity: {cluster_summary['avg_centipawn_loss']} centipawn loss")
+        logger.debug(f"Example Moves: {', '.join(cluster_summary['example_moves'][:3])}...")
 
     return summary
 
@@ -111,7 +113,7 @@ def generate_llm_explanation(cluster_summary):
     """
     
     # In production, you would call your LLM API here.
-    print(f"\n[LLM Explanation for {llm_context['global_pattern'].split(':')[0]} generated...]")
+    logger.debug(f"LLM Explanation generated for {llm_context['global_pattern'].split(':')[0]}")
     # Placeholder for the actual LLM output
     llm_output = f"Your primary weakness, **{llm_context['global_pattern'].split(':')[0]}**, is a common issue where you miss immediate, simple threats. Your mistakes of this type are relatively severe, averaging a {llm_context['avg_severity']} centipawn loss, and tend to happen during the **{ 'Opening' if llm_context['avg_move_num'] < 15 else 'Middlegame'}** when the position is still quite **complex** ({llm_context['avg_complexity']} pieces). These errors indicate you may be over-focused on your own plans and missing your opponent's direct threats. To fix this, dedicate 15 minutes a day to solving **simple tactical puzzles** like **forks and pins** on platforms like Lichess or Chess.com, ensuring you check for opponent's checks, captures, and threats (the 'blunder check') before every move. Keep it up! 🚀"
     

@@ -19,6 +19,9 @@ from backend.app.models.puzzle_models import (
     UserTrainingHistory
 )
 
+# 4. Import Logger
+from backend.app.core.logger import logger
+
 router = APIRouter()
 
 # --- CONFIG ---
@@ -37,10 +40,13 @@ async def generate_training_puzzles(request: GeneratePuzzleRequest):
     """
     # Validate Stockfish path
     if not os.path.exists(STOCKFISH_PATH):
+        logger.error(f"Stockfish engine not found at {STOCKFISH_PATH}")
         raise HTTPException(
             status_code=500, 
             detail=f"Stockfish engine not found at {STOCKFISH_PATH}. Please check STOCKFISH_PATH environment variable."
         )
+    
+    logger.info(f"Generating puzzles for FEN: {request.fen[:50]}...")
     
     # 1. Initialize Logic Layer
     generator = GeneticPuzzleGenerator(STOCKFISH_PATH)
@@ -52,6 +58,7 @@ async def generate_training_puzzles(request: GeneratePuzzleRequest):
         
         # Check if any puzzles were generated
         if not raw_puzzles_data or len(raw_puzzles_data) == 0:
+            logger.warning("No puzzles generated - position may be too simple")
             raise HTTPException(
                 status_code=400,
                 detail="Could not generate puzzles from this position. The position may be too simple or already solved."
@@ -78,6 +85,7 @@ async def generate_training_puzzles(request: GeneratePuzzleRequest):
         if puzzle_objects:
             # We use the repository method we created earlier
             await training_repo.create_puzzles_bulk(puzzle_objects)
+            logger.info(f"Successfully saved {len(puzzle_objects)} puzzles to database")
             
         return puzzle_objects
 
@@ -85,7 +93,7 @@ async def generate_training_puzzles(request: GeneratePuzzleRequest):
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        print(f"Evolutionary Algorithm Error: {e}")
+        logger.error(f"Puzzle generation failed: {str(e)}")
         import traceback
         traceback.print_exc()
         # Return a 500 error so the frontend knows something broke
@@ -98,6 +106,8 @@ async def submit_result(result: SubmitPuzzleResultRequest):
     Data Usage: This data will be fed into the Q-Learning Agent later.
     """
     try:
+        logger.info(f"Recording training result for user {result.user_id}, puzzle {result.puzzle_id}")
+        
         # 1. Create the History Model
         history_entry = UserTrainingHistory(
             user_id=result.user_id,
@@ -109,7 +119,8 @@ async def submit_result(result: SubmitPuzzleResultRequest):
         # 2. Save via Repository
         await training_repo.record_attempt(history_entry)
         
+        logger.debug(f"Training result saved successfully")
         return {"status": "success", "message": "Training result saved."}
     except Exception as e:
-        print(f"Submission Error: {e}")
+        logger.error(f"Submission error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

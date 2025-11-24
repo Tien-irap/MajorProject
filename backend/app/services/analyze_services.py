@@ -11,11 +11,12 @@ from backend.app.services.llm_analyzer import (
     get_llm_weakness_summary
 )
 from backend.app.services.global_analyzer import GlobalAnalyzer
+from backend.app.core.logger import logger
 
 # --- Configuration ---
 STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "./stockfish/stockfish-macos-m1-apple-silicon")
 if not os.path.exists(STOCKFISH_PATH):
-    print(f"WARNING: Stockfish executable not found at {STOCKFISH_PATH}")
+    logger.error(f"Stockfish executable not found at {STOCKFISH_PATH}")
 
 def perform_full_game_analysis(
     pgn_string: str, 
@@ -29,7 +30,7 @@ def perform_full_game_analysis(
         pgn_string (str): The PGN content of the game.
         global_analyzer (GlobalAnalyzer): The pre-trained K-Means model instance.
     """
-    print("Analysis Service: Starting full analysis...")
+    logger.info("Starting full analysis...")
     
     # 1. Load PGN string into a game object
     pgn_file = io.StringIO(pgn_string)
@@ -42,15 +43,15 @@ def perform_full_game_analysis(
     player_name = game_headers.get("White", "Player") # Just an example
 
     # 2. Call analyze_game from analyze_pgn.py
-    print(f"Analysis Service: Running Stockfish analysis (Depth 15)...")
+    logger.info(f"Running Stockfish analysis (Depth 15)...")
     move_analysis = analyze_game(game, STOCKFISH_PATH)
     
     if not move_analysis:
-        print("Analysis Service: No moves found in game. Aborting.")
+        logger.warning("No moves found in game. Aborting.")
         return {"error": "No moves found in PGN."}
         
     # 3. Call analyze_player_weaknesses_global
-    print("Analysis Service: Analyzing player weaknesses...")
+    logger.info("Analyzing player weaknesses...")
     # This report contains the raw clusters
     weakness_report_raw = analyze_player_weaknesses_global(
         move_analysis, 
@@ -61,11 +62,11 @@ def perform_full_game_analysis(
     # 4. Call LLM functions for summaries and explanations
     
     # 4a. Get LLM summary for key moves (mistakes/best)
-    print("Analysis Service: Generating LLM summary for key moves...")
+    logger.info("Generating LLM summary for key moves...")
     key_move_summary = get_llm_summary_for_game(move_analysis)
     
     # 4b. Get LLM explanations for the weakness profiles
-    print("Analysis Service: Generating LLM explanations for weakness profiles...")
+    logger.info("Generating LLM explanations for weakness profiles...")
     weakness_report_explained = {}
     if weakness_report_raw:
         weakness_report_explained = get_llm_weakness_summary(
@@ -73,10 +74,10 @@ def perform_full_game_analysis(
             player_name=player_name
         )
     else:
-        print("Analysis Service: No weaknesses found, skipping LLM summary.")
+        logger.debug("No weaknesses found, skipping LLM summary.")
 
     # 5. Assemble the single, large result dictionary
-    print("Analysis Service: Assembling final report.")
+    logger.info("Assembling final report.")
     final_result = {
         "game_headers": game_headers,
         "move_by_move_analysis": move_analysis,
@@ -84,5 +85,5 @@ def perform_full_game_analysis(
         "key_move_summary": key_move_summary,
     }
     
-    print("Analysis Service: Full analysis complete.")
+    logger.info("Full analysis complete.")
     return final_result
