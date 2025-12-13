@@ -20,6 +20,7 @@ export interface WeaknessProfile {
 
 export interface KeyMoveSummaryItem {
   move_info: MoveAnalysis;
+  motif?: string;
   explanation: string;
 }
 

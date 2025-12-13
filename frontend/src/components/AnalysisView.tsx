@@ -84,6 +84,11 @@ export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) =
                     <div>
                       <span className={`${textMutedForeground} text-sm`}>Move {mistake.move_info.move_num}</span>
                       <p className={`${textForeground} font-mono font-semibold`}>{mistake.move_info.move}</p>
+                      {mistake.motif && (
+                        <span className={`inline-block mt-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-500/20 text-red-400 border border-red-500/30`}>
+                          {mistake.motif}
+                        </span>
+                      )}
                     </div>
                     <div className={`${textDestructive} font-bold`}>-{mistake.move_info.eval_diff} cp</div>
                   </div>
@@ -118,6 +123,11 @@ export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) =
                     <div>
                       <span className={`${textMutedForeground} text-sm`}>Move {bestMove.move_info.move_num}</span>
                       <p className={`${textForeground} font-mono font-semibold`}>{bestMove.move_info.move}</p>
+                      {bestMove.motif && (
+                        <span className={`inline-block mt-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-500/20 text-green-400 border border-green-500/30`}>
+                          {bestMove.motif}
+                        </span>
+                      )}
                     </div>
                     <div className={`${textSuccess} font-bold`}>Best Move</div>
                   </div>
