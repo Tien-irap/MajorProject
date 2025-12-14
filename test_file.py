@@ -1,7 +1,7 @@
 import subprocess
 
 process = subprocess.Popen(
-    ["./stockfish/stockfish-macos-m1-apple-silicon"],
+    ["C:\\Users\\lenovo\\Downloads\\stockfish-windows-x86-64-avx2\\stockfish"],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE

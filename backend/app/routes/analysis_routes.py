@@ -5,14 +5,14 @@ from fastapi import (
     HTTPException, 
     Path, 
     status,
-    Depends,
-    Request
+    Depends
 )
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 # Import your helper functions, models, and repo
 from ..repos import analyze_repo
 from ..core.celery_app import celery_app
+from ..core.database import db_async  # Import the global db_async instance
 from ..models.analysis_model import (
     AnalysisCreateResponse, 
     AnalysisStatusResponse, 
@@ -22,13 +22,9 @@ from ..models.analysis_model import (
 # --- CREATE ROUTER ---
 router = APIRouter()
 
-# --- DEPENDENCY INJECTION ---
-def get_analysis_collection(request: Request) -> AsyncIOMotorCollection:
-    """
-    A dependency that gets the database collection 
-    from the app's state (which was set in main.py).
-    """
-    return request.app.state.analysis_collection
+# --- DEPENDENCY FUNCTION ---
+async def get_analysis_collection() -> AsyncIOMotorCollection:
+    return db_async.db.analyses  # Assuming the collection name is 'analyses'
 
 # --- API ENDPOINTS ---
 
@@ -134,3 +130,43 @@ async def get_analysis_result(
             "message": "Analysis is not yet complete. Please poll the /status endpoint.",
             "result": None
         }
+    # Import comparison logic
+from ..services.master_comparison import compare_with_master
+from bson import ObjectId  # Need this for manual find
+
+@router.get(
+    "/{analysis_id}/comparison",
+    response_model=dict 
+)
+async def get_master_comparison(
+    analysis_id: str = Path(..., title="The ID of the analysis job"),
+    collection: AsyncIOMotorCollection = Depends(get_analysis_collection)
+):
+    """
+    4. The "Master Comparison" Endpoint
+    Compares the user's analysis result with Master benchmarks.
+    """
+    try:
+        # 1. Convert ID manually (since analyze_repo might return a wrapper)
+        # Or rely on the repo if you have a get_job function there.
+        # Let's do it safely using the repo:
+        job = await analyze_repo.get_job_by_id_async(collection, analysis_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job["status"] != "COMPLETED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Analysis is not yet complete. Please wait until the job is completed."
+        )
+
+    if "result" not in job or not job["result"]:
+         raise HTTPException(status_code=500, detail="Analysis completed but no result data found.")
+
+    # 2. Perform the comparison
+    comparison_result = compare_with_master(job["result"])
+
+    return comparison_result

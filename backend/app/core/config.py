@@ -14,10 +14,12 @@ class Settings:
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     
     # External Tools
-    STOCKFISH_PATH: str = os.getenv("STOCKFISH_PATH", "./stockfish/stockfish-macos-m1-apple-silicon")
+    STOCKFISH_PATH: str = os.getenv("STOCKFISH_PATH", r"C:\Users\lenovo\Downloads\stockfish-windows-x86-64-avx2\stockfish\stockfish-windows-x86-64-avx2.exe")
     GLOBAL_MISTAKES_CSV: str = os.getenv("GLOBAL_MISTAKES_CSV", "global_mistake_features.csv")
     
     # API Keys
-    MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
+    MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY")
+    if not MISTRAL_API_KEY:
+        print("WARNING: MISTRAL_API_KEY is not set. LLM features will be disabled.")
 
 settings = Settings()
