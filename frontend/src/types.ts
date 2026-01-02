@@ -51,6 +51,15 @@ export interface StatusResponse {
 }
 
 // --- Evolutionary Puzzle Types ---
+export interface EvolvedPuzzle {
+  fen: string;
+  best_move: string;
+  fitness: number;
+  motif: string;
+  type: "original" | "evolved";
+  is_parent?: boolean;
+}
+
 export interface PuzzleDB {
   _id: string;
   fen: string;
@@ -59,11 +68,15 @@ export interface PuzzleDB {
   generator_type: "seed" | "evolutionary";
   difficulty_level?: number;
   created_at?: string;
+  fitness?: number;
+  best_move?: string;
+  is_parent?: boolean;
 }
 
 export interface GeneratePuzzleRequest {
   fen: string;
   move_uci: string;
+  motif?: string;
   difficulty_level: number;
 }
 

@@ -1,225 +1,220 @@
 import chess
 import chess.engine
 import copy
-import os
-from typing import List, Dict, Any, Optional
+from backend.app.services.mutation_engine import mutation_engine
 from backend.app.core.logger import logger
 
-class GeneticPuzzleGenerator:
-    """
-    Implements an Evolutionary Algorithm to generate unique chess puzzles.
-    
-    Biologically-Inspired Components:
-    1. Genotype: The Board State (FEN).
-    2. Mutation: Geometric transformations (Mirroring, Shifting) and Noise Injection.
-    3. Fitness Function: Stockfish Evaluation (Must remain solvable and tactical).
-    4. Selection: Elitism (Only valid, high-quality mutations survive).
-    """
+class EvolutionaryPuzzleGenerator:
+    def __init__(self, stockfish_path):
+        self.engine_path = stockfish_path
 
-    def __init__(self, stockfish_path: str):
-        self.stockfish_path = stockfish_path
-        self.engine = None
-
-    def _start_engine(self):
-        if not self.engine:
-            # Ensure the path is correct for your system
-            self.engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
-
-    def _stop_engine(self):
-        if self.engine:
-            self.engine.quit()
-            self.engine = None
-
-    # --- MUTATION OPERATORS (The "Evolution") ---
-
-    def _mutate_mirror_horizontal(self, board: chess.Board) -> Optional[chess.Board]:
+    def evolve_puzzle(self, parent_fen, motif, solution_move_uci, num_generations=1):
         """
-        Mutation Type: Geometric Reflection.
-        Flips the board horizontally (A-file <-> H-file).
-        This forces the user to recognize the pattern's geometry, not just memory.
+        The Main Loop (Refined Workflow):
+        1. Takes a user's mistake (parent_fen) as the single parent.
+        2. Mutates it using valid chess geometry (Asexual Reproduction).
+        3. Validates the 'children' with Stockfish to ensure the tactic is preserved.
+        4. Uses Elitism: Always keeps the original parent.
+        5. Returns top 3 unique puzzles sorted by fitness.
         """
-        try:
-            new_board = board.transform(chess.flip_horizontal)
+        
+        # 1. Population Initialization (Single Parent)
+        current_population = [parent_fen]
+        valid_offspring = []
+        
+        # Elitism: Evaluate and store the original parent
+        parent_fitness, parent_best_move = self._evaluate_fitness(parent_fen)
+        logger.info(f"Parent puzzle fitness: {parent_fitness:.2f}, best move: {parent_best_move}")
+        
+        # Store parent as a candidate (it will always be considered)
+        if parent_fitness >= 0.5:  # Parent must be at least somewhat valid
+            valid_offspring.append({
+                "fen": parent_fen,
+                "best_move": parent_best_move or solution_move_uci,
+                "fitness": parent_fitness,
+                "motif": motif,
+                "type": "original",
+                "is_parent": True
+            })
+
+        # We rely on Stockfish to find the best move in the mutated position.
+        # The motif should be preserved by the geometric transformations.
+
+        for generation in range(num_generations):
+            new_candidates = set()
             
-            # Validate the resulting board is legal
-            if not new_board.is_valid():
-                return None
+            # 2. Mutation (Asexual Reproduction - No Crossover)
+            logger.info(f"Generation {generation + 1}: Generating mutations...")
+            for fen in current_population:
+                # Generate ~5 mutants per parent (limited to avoid API overload)
+                mutants = mutation_engine.generate_candidates(fen, motif, num_candidates=5)
+                new_candidates.update(mutants)
+                logger.info(f"Generated {len(mutants)} mutation candidates")
+
+            # 3. Genotype -> Phenotype Validation
+            logger.info(f"Validating {len(new_candidates)} candidates...")
+            for child_fen in new_candidates:
+                # Skip if identical to parent
+                if child_fen == parent_fen:
+                    continue
+                    
+                # Validate the board is legal
+                try:
+                    board = chess.Board(child_fen)
+                    if not board.is_valid():
+                        logger.debug(f"Invalid board rejected: {child_fen[:30]}...")
+                        continue
+                except Exception as e:
+                    logger.debug(f"Board creation failed: {e}")
+                    continue
                 
-            return new_board
-        except Exception as e:
-            logger.error(f"Mirror mutation error: {e}")
-            return None
-
-    def _mutate_shift(self, board: chess.Board, direction: str) -> Optional[chess.Board]:
-        """
-        Mutation Type: Spatial Translation.
-        Shifts all pieces left or right by 1 file.
-        Forces the user to recognize the pattern relative to board edges.
-        """
-        new_board = chess.Board(None) # Start empty
-        shift = -1 if direction == "left" else 1
-        
-        piece_map = board.piece_map()
-        
-        for square, piece in piece_map.items():
-            file_idx = chess.square_file(square)
-            rank_idx = chess.square_rank(square)
-            
-            new_file = file_idx + shift
-            
-            # Fitness Constraint: If a piece falls off the world, the mutation dies.
-            if new_file < 0 or new_file > 7:
-                return None
+                # 4. Fitness Evaluation
+                fitness_score, best_move_uci = self._evaluate_fitness(child_fen)
                 
-            new_square = chess.square(new_file, rank_idx)
-            new_board.set_piece_at(new_square, piece)
-            
-        # Copy game state
-        new_board.turn = board.turn
-        new_board.castling_rights = chess.BB_EMPTY # Shifting usually breaks castling
-        new_board.ep_square = None # En passant is no longer valid after shifting
-        new_board.halfmove_clock = 0
-        new_board.fullmove_number = board.fullmove_number
+                # Fitness Criteria (Refined):
+                # 1. Valid Board ✓
+                # 2. Clear Solution (Gap >= 0.5 for moderate clarity, >= 1.5 for high clarity)
+                # 3. Not identical to parent ✓
+                # 4. Side to move has winning advantage
+                
+                if fitness_score >= 0.5:  # Lowered threshold for more variations
+                    valid_offspring.append({
+                        "fen": child_fen,
+                        "best_move": best_move_uci,
+                        "fitness": fitness_score,
+                        "motif": motif,
+                        "type": "evolved",
+                        "is_parent": False
+                    })
+                    logger.info(f"Valid offspring found with fitness: {fitness_score:.2f}")
+
+            # 5. Stop Condition: After 1 generation (as per refined workflow)
+            logger.info(f"Generation {generation + 1} complete. Total valid offspring: {len(valid_offspring)}")
+            break  # Stop after 1 generation
         
-        # Validate the board has required pieces and is legal
-        if not new_board.is_valid():
-            return None
+        # 6. Replacement (Survival of the Fittest with Elitism)
+        # ALWAYS include the parent as the first puzzle (elitism)
+        parent_fitness, parent_best_move = self._evaluate_fitness(parent_fen)
+        
+        # If parent evaluation failed, use the original best move passed in
+        # Fallback: If engine calc failed, use the user provided solution move
+        if not parent_best_move:
+             logger.warning("Engine failed to verify parent best move. Using provided solution move.")
+             # Normalize solution_move_uci (remove promotion if needed or keep it)
+             parent_best_move = solution_move_uci 
+             parent_fitness = 1.0 # Force validity
+        
+        parent_puzzle = {
+            "fen": parent_fen,
+            "best_move": parent_best_move,
+            "fitness": parent_fitness if parent_fitness >= 0 else 0.0,
+            "motif": motif,
+            "type": "original",
+            "is_parent": True
+        }
+        
+        logger.info(f"Parent puzzle fitness: {parent_fitness:.2f}")
+        
+        # Remove duplicates from offspring based on FEN (keep highest fitness)
+        unique_puzzles = {}
+        for puzzle in valid_offspring:
+            fen = puzzle['fen']
+            if fen not in unique_puzzles or puzzle['fitness'] > unique_puzzles[fen]['fitness']:
+                unique_puzzles[fen] = puzzle
+        
+        offspring_population = list(unique_puzzles.values())
+        
+        # Sort offspring by clarity (fitness) - highest first
+        offspring_population.sort(key=lambda x: x['fitness'], reverse=True)
+        
+        # Return parent + top offspring (total = 4 puzzles: 1 parent + 3 evolved)
+        top_puzzles = [parent_puzzle] + offspring_population[:3]
+        
+        logger.info(f"Evolution complete. Returning {len(top_puzzles)} puzzles (1 parent + {len(offspring_population[:3])} evolved).")
+        for i, p in enumerate(top_puzzles):
+            logger.info(f"Puzzle {i+1}: Fitness={p['fitness']:.2f}, Type={p['type']}, is_parent={p['is_parent']}")
+        
+        return top_puzzles
+
+    def _evaluate_fitness(self, fen):
+        """
+        Returns (Score_Gap, Best_Move_UCI).
+        
+        Fitness Formula:
+        Score_Gap = (Best Move Score) - (2nd Best Move Score) / 100
+        
+        High Gap (>= 1.5): Puzzle has a very clear, obvious solution
+        Medium Gap (0.5 - 1.5): Puzzle is moderate, solution is findable
+        Low Gap (< 0.5): Puzzle is ambiguous or confusing
+        
+        Also validates:
+        - Side to move has winning advantage (> +1 pawn)
+        - Position is not already mate/stalemate
+        """
+        try:
+            board = chess.Board(fen)
+            if not board.is_valid():
+                return -1, None
             
-        return new_board
+            # Check for immediate game over
+            if board.is_game_over():
+                return -1, None
 
-    # --- FITNESS FUNCTION (The "Natural Selection") ---
-
-    def _calculate_fitness(self, board: chess.Board, baseline_eval_score: int) -> int:
-        """
-        Determines if a mutation survives.
-        Fitness = 1 if (Legal AND Winning AND Solvable).
-        Fitness = 0 if (Illegal OR Draw/Loss OR Too simple).
-        """
-        if not board.is_valid():
-            return 0
+        except Exception as e:
+            logger.debug(f"Board validation error: {e}")
+            return -1, None
 
         try:
-            # Analyze at low depth for efficiency
-            info = self.engine.analyse(board, chess.engine.Limit(depth=12))
-            
-            # Check if PV exists
-            if "pv" not in info or not info["pv"] or len(info["pv"]) == 0:
-                return 0
-            
-            # Get score from perspective of player to move
-            score = info["score"].relative.score(mate_score=10000)
-            
-            if score is None: 
-                return 0
+            # Connect to engine for this specific evaluation
+            with chess.engine.SimpleEngine.popen_uci(self.engine_path) as engine:
+                # Analyze for top 2 moves with slightly more time for accuracy
+                info = engine.analyse(board, chess.engine.Limit(time=0.5), multipv=2)
+                
+                if len(info) < 1:
+                    return -1, None  # No moves found
 
-            # Survival Criteria 1: Must be winning (> +1.5 pawns)
-            if score < 150: 
-                return 0
-            
-            return 1 # The organism survives
+                # Get Score of Best Move
+                best_score_obj = info[0]["score"].relative
+                best_move = info[0]["pv"][0].uci()
+                
+                # Handle mate scores
+                if best_score_obj.is_mate():
+                    mate_in = best_score_obj.mate()
+                    if mate_in > 0:  # Winning mate
+                        # Mate puzzles have high fitness
+                        best_score = 10000
+                    else:
+                        return -1, None  # Getting mated, not a valid puzzle
+                else:
+                    best_score = best_score_obj.score(mate_score=10000)
+
+                # If winning side doesn't have advantage, reject
+                if best_score < 100:  # Less than +1 pawn advantage
+                    return -1, None
+
+                # Calculate Gap (Distinctness)
+                if len(info) >= 2:
+                    second_score_obj = info[1]["score"].relative
+                    
+                    if second_score_obj.is_mate():
+                        second_mate_in = second_score_obj.mate()
+                        second_score = 10000 if second_mate_in > 0 else -10000
+                    else:
+                        second_score = second_score_obj.score(mate_score=10000)
+                    
+                    gap = best_score - second_score
+                    
+                    # Normalize Gap to pawns (centipawns / 100)
+                    fitness = gap / 100.0
+                    
+                    # Cap fitness at reasonable value
+                    fitness = min(fitness, 15.0)
+                else:
+                    # Only 1 good move found -> High Fitness (Forced move)
+                    fitness = 10.0 
+
+                return fitness, best_move
+
         except Exception as e:
-            logger.error(f"Fitness calculation error: {e}")
-            return 0
-
-    # --- MAIN GENERATION LOOP ---
-
-    def generate_puzzles(self, seed_fen: str, num_variations: int = 3) -> List[Dict[str, Any]]:
-        """
-        The Evolutionary Cycle.
-        """
-        self._start_engine()
-        seed_board = chess.Board(seed_fen)
-        generated_puzzles = []
-
-        # 1. Analyze Seed (Control Group)
-        try:
-            info = self.engine.analyse(seed_board, chess.engine.Limit(depth=15))
-            
-            # Check if PV (principal variation) exists
-            if "pv" not in info or not info["pv"] or len(info["pv"]) == 0:
-                self._stop_engine()
-                return [] # No valid moves found
-            
-            best_move = info["pv"][0].uci()
-            score = info["score"].relative.score(mate_score=10000)
-            
-            if score is None:
-                self._stop_engine()
-                return [] # Score unavailable
-        except Exception as e:
-            logger.error(f"Error analyzing seed position: {e}")
-            self._stop_engine()
-            return [] # Seed was bad
-
-        # Add Seed Puzzle
-        generated_puzzles.append({
-            "fen": seed_fen,
-            "solution": [best_move],
-            "theme": "Original Mistake",
-            "generator_type": "seed",
-            "eval_score": score
-        })
-
-        # 2. Apply Mutations
-        mutations_to_try = [
-            ("mirror", None), 
-            ("shift", "left"), 
-            ("shift", "right")
-        ]
-
-        logger.info(f"Starting mutations for seed FEN")
-        
-        for m_type, direction in mutations_to_try:
-            if len(generated_puzzles) > num_variations:
-                break
-
-            logger.debug(f"Attempting {m_type} mutation {f'({direction})' if direction else ''}")
-            
-            mutated_board = None
-            if m_type == "mirror":
-                mutated_board = self._mutate_mirror_horizontal(seed_board)
-            elif m_type == "shift":
-                mutated_board = self._mutate_shift(seed_board, direction)
-            
-            if not mutated_board:
-                logger.warning(f"Mutation {m_type} failed: Board became invalid")
-                continue
-            
-            logger.debug(f"Mutation {m_type} created successfully, testing fitness")
-
-            # 3. Check Fitness
-            fitness = self._calculate_fitness(mutated_board, score)
-            logger.debug(f"Fitness score for {m_type}: {fitness}")
-            
-            if fitness == 1:
-                    # 4. Selection: It survived, add to population
-                    try:
-                        info_mut = self.engine.analyse(mutated_board, chess.engine.Limit(depth=15))
-                        
-                        # Check if PV exists for mutated position
-                        if "pv" not in info_mut or not info_mut["pv"] or len(info_mut["pv"]) == 0:
-                            continue # Skip this mutation
-                        
-                        sol_move = info_mut["pv"][0].uci()
-                        mut_score = info_mut["score"].relative.score(mate_score=10000)
-                        
-                        if mut_score is None:
-                            continue # Skip if score unavailable
-                        
-                        generated_puzzles.append({
-                            "fen": mutated_board.fen(),
-                            "solution": [sol_move],
-                            "theme": f"{m_type.capitalize()}ed Variation",
-                            "generator_type": "evolutionary",
-                            "eval_score": mut_score
-                        })
-                        logger.info(f"{m_type.capitalize()} mutation SURVIVED and added to puzzle set")
-                    except Exception as e:
-                        logger.error(f"Error analyzing mutated position ({m_type}): {e}")
-                        continue # Skip this mutation
-            else:
-                logger.debug(f"Fitness test FAILED for {m_type} - mutation eliminated")
-
-        self._stop_engine()
-        logger.info(f"Puzzle generation complete: {len(generated_puzzles)} total puzzles")
-        return generated_puzzles
+            logger.error(f"Engine evaluation error: {e}")
+            return -1, None

@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import { useState } from "react";
 import { EvolutionaryPuzzleCard } from "./EvolutionaryPuzzleCard";
-import { Button, Card } from "./ui/stubs";
-import { ArrowLeft, Loader2, Dna, Brain, Trophy, TrendingUp } from "lucide-react";
-import type { PuzzleDB, SubmitPuzzleResult } from "../types";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ArrowLeft, Loader2, Trophy, ArrowRight, Brain } from "lucide-react";
+import type { PuzzleDB, SubmitPuzzleResult } from "@/types";
 
 interface EvolutionaryTrainingRoomProps {
   puzzles: PuzzleDB[];
@@ -17,239 +20,197 @@ export const EvolutionaryTrainingRoom = ({
   onSubmitResult,
   isLoading,
 }: EvolutionaryTrainingRoomProps) => {
-  const [completedPuzzles, setCompletedPuzzles] = useState<Set<string>>(new Set());
-  const [performance, setPerformance] = useState<{
-    correct: number;
-    total: number;
-    avgTime: number;
-  }>({ correct: 0, total: 0, avgTime: 0 });
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isSessionComplete, setIsSessionComplete] = useState(false);
+  const [results, setResults] = useState<{id: string, time: number, correct: boolean}[]>([]);
 
-  const handlePuzzleComplete = async (puzzleId: string, timeSeconds: number, isCorrect: boolean) => {
-    // Mark as completed
-    setCompletedPuzzles(prev => new Set(prev).add(puzzleId));
-
-    // Update performance stats
-    setPerformance(prev => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      total: prev.total + 1,
-      avgTime: (prev.avgTime * prev.total + timeSeconds) / (prev.total + 1),
-    }));
-
-    // Submit to backend
-    try {
-      await onSubmitResult({
-        puzzle_id: puzzleId,
-        user_id: "demo_user", // TODO: Replace with actual user ID from auth
-        is_correct: isCorrect,
-        time_taken_seconds: timeSeconds,
-      });
-    } catch (error) {
-      console.error("Failed to submit result:", error);
-    }
-  };
-
-  // Styling
-  const textForeground = "text-white";
-  const textMuted = "text-zinc-400";
-  const gradientBoard = "bg-zinc-900";
-  const borderBorder = "border-zinc-800";
-  const textAccent = "text-cyan-400";
-  const gradientGold = "bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500";
-  const textPrimaryForeground = "text-black";
-
+  // 1. Loading State
   if (isLoading) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-500">
-        <Loader2 className="w-16 h-16 text-cyan-400 animate-spin" />
-        <h3 className="text-2xl font-bold text-white">Evolving Your Puzzles...</h3>
-        <p className="text-zinc-400 max-w-md text-center">
-          Our genetic algorithm is mutating the position to create tactical variations.
-        </p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in duration-500">
+        <div className="relative">
+          <Loader2 className="w-16 h-16 text-cyan-500 animate-spin" />
+          <div className="absolute inset-0 blur-xl bg-cyan-500/20 rounded-full" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-2xl font-bold text-white">Evolving Puzzles...</h3>
+          <p className="text-zinc-400">Applying genetic mutations to your position</p>
+        </div>
       </div>
     );
   }
 
+  // 2. Empty State
   if (!puzzles || puzzles.length === 0) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-4">
-        <div className="p-6 bg-red-500/10 rounded-full mb-4">
-          <Brain className="w-16 h-16 text-red-400" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-6 text-center">
+        <div className="p-6 bg-red-500/10 rounded-full border border-red-500/20">
+          <Trophy className="w-12 h-12 text-red-400" />
         </div>
-        <h3 className="text-2xl font-bold text-white">No Puzzles Generated</h3>
-        <p className="text-zinc-400 max-w-md text-center">
-          We couldn't generate tactical variations from your position. This might happen if the position is too simple or already solved.
-        </p>
-        <Button onClick={onBack} className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Go Back
+        <div>
+          <h3 className="text-xl font-bold text-white">No Puzzles Generated</h3>
+          <p className="text-zinc-400 mt-2 max-w-md mx-auto">
+            This position might be too simple or ambiguous for our evolutionary engine.
+          </p>
+        </div>
+        <Button onClick={onBack} variant="secondary">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Return to Analysis
         </Button>
       </div>
     );
   }
 
-  // Separate seed from mutations
-  const seedPuzzle = puzzles.find(p => p.generator_type === "seed");
-  const mutatedPuzzles = puzzles.filter(p => p.generator_type === "evolutionary");
+  // 3. Completion State (Summary)
+  if (isSessionComplete) {
+    const accuracy = Math.round((results.filter(r => r.correct).length / results.length) * 100);
+    
+    return (
+      <div className="max-w-md mx-auto text-center space-y-8 animate-in zoom-in-95 duration-500 mt-10">
+        <div className="relative w-24 h-24 mx-auto">
+          <div className="absolute inset-0 bg-green-500/20 blur-xl rounded-full" />
+          <div className="relative bg-zinc-900 border-2 border-green-500/50 rounded-full w-full h-full flex items-center justify-center">
+            <Trophy className="w-10 h-10 text-green-400" />
+          </div>
+        </div>
+        
+        <div className="space-y-2">
+          <h2 className="text-3xl font-bold text-white">Training Complete!</h2>
+          <p className="text-zinc-400">Evolutionary session finished with <span className="text-green-400 font-bold">{accuracy}%</span> accuracy.</p>
+        </div>
+        
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-1 divide-y divide-zinc-800/50">
+          {results.map((res, idx) => (
+            <div key={idx} className="flex justify-between items-center p-3 text-sm">
+              <span className="text-zinc-500 font-medium">Puzzle {idx + 1}</span>
+              <span className={res.correct ? "text-green-400 font-mono" : "text-red-400 font-mono"}>
+                {res.correct ? "Solved" : "Missed"} ({res.time.toFixed(1)}s)
+              </span>
+            </div>
+          ))}
+        </div>
 
-  const allCompleted = completedPuzzles.size === puzzles.length;
-  const accuracy = performance.total > 0 
-    ? Math.round((performance.correct / performance.total) * 100) 
-    : 0;
+        <Button onClick={onBack} className="w-full bg-white text-black hover:bg-zinc-200" size="lg">
+          Return to Analysis
+        </Button>
+      </div>
+    );
+  }
+
+  // 4. Active Puzzle Logic
+  const currentPuzzle = puzzles[currentIndex];
+  // Logic: First puzzle is ALWAYS Phase 1, rest are Phase 2
+  const isPhase1 = currentIndex === 0;
+  
+  const phaseLabel = isPhase1 ? "Phase 1: Original Mistake" : "Phase 2: Evolved Variation";
+  const phaseColor = isPhase1 ? "text-red-400" : "text-purple-400";
+  const phaseBg = isPhase1 ? "bg-red-500/10 border-red-500/20" : "bg-purple-500/10 border-purple-500/20";
+
+  const handlePuzzleComplete = async (timeTaken: number, isCorrect: boolean) => {
+    // 1. Submit to Backend
+    try {
+      await onSubmitResult({
+        puzzle_id: currentPuzzle._id,
+        user_id: "demo_user", 
+        is_correct: isCorrect,
+        time_taken_seconds: timeTaken,
+      });
+    } catch (error) {
+      console.error("Failed to submit result:", error);
+    }
+
+    // 2. Local State Update
+    setResults(prev => [...prev, {
+      id: currentPuzzle._id,
+      time: timeTaken,
+      correct: isCorrect
+    }]);
+
+    // 3. Advance to next puzzle after short delay
+    setTimeout(() => {
+      if (currentIndex < puzzles.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        setIsSessionComplete(true);
+      }
+    }, 1500);
+  };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Navigation & Progress */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <Button 
+            variant="ghost" 
             onClick={onBack} 
-            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+            className="text-zinc-500 hover:text-white pl-0"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Analysis
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
-          <div>
-            <h2 className={`text-3xl font-bold ${textForeground} flex items-center gap-3`}>
-              <Dna className="w-8 h-8 text-purple-500" />
-              Evo-Chess Training Lab
-            </h2>
-            <p className={`${textMuted} mt-1`}>
-              Train pattern recognition through evolutionary variations
-            </p>
+          
+          <div className="flex gap-1.5">
+            {puzzles.map((_, idx) => (
+              <div 
+                key={idx} 
+                className={`h-1.5 w-8 rounded-full transition-all duration-300 ${
+                  idx === currentIndex 
+                    ? (isPhase1 ? 'bg-red-500 w-12' : 'bg-purple-500 w-12') 
+                    : idx < currentIndex ? 'bg-green-500' : 'bg-zinc-800'
+                }`} 
+              />
+            ))}
           </div>
+        </div>
+
+        {/* Phase Indicator */}
+        <div className={`flex items-center justify-center gap-3 py-2 px-6 rounded-full border w-fit mx-auto transition-colors duration-500 ${phaseBg}`}>
+           <span className={`text-sm font-bold tracking-wide uppercase flex items-center gap-2 ${phaseColor}`}>
+             {isPhase1 ? <ArrowLeft className="w-4 h-4 rotate-[-45deg]" /> : <ArrowRight className="w-4 h-4" />}
+             {phaseLabel}
+           </span>
         </div>
       </div>
 
       {/* Info Banner */}
-      <Card className={`p-6 ${gradientBoard} ${borderBorder} border shadow-xl`}>
+      <Card className="p-6 bg-zinc-900 border border-zinc-800 shadow-xl max-w-[600px] mx-auto hidden md:block animate-in fade-in slide-in-from-top-4">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-purple-500/10 rounded-full flex-shrink-0">
             <Brain className="w-8 h-8 text-purple-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-xl font-semibold text-white mb-2">How It Works</h3>
-            <p className={`${textMuted} leading-relaxed mb-3`}>
+            <h3 className="text-lg font-semibold text-white mb-2">How It Works</h3>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-3">
               Each puzzle below was generated using a <strong>Genetic Algorithm</strong>. 
               The first card shows your original mistake. The subsequent cards are <strong>tactical mutations</strong> 
               — mirrored or shifted variations that preserve the core pattern but change the geometry.
             </p>
-            <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                <span className={textMuted}><strong>Seed:</strong> Your actual mistake</span>
+                <span className="text-zinc-500"><strong>Seed:</strong> Your actual mistake</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <span className={textMuted}><strong>Mutations:</strong> Evolved variations</span>
+                <span className="text-zinc-500"><strong>Mutations:</strong> Evolved variations</span>
               </div>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Performance Stats */}
-      {performance.total > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className={`p-4 ${gradientBoard} ${borderBorder} border shadow-lg`}>
-            <div className="flex items-center gap-3">
-              <Trophy className="w-8 h-8 text-yellow-500" />
-              <div>
-                <p className="text-xs text-zinc-500 uppercase font-semibold">Accuracy</p>
-                <p className="text-2xl font-bold text-white">{accuracy}%</p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card className={`p-4 ${gradientBoard} ${borderBorder} border shadow-lg`}>
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-cyan-500" />
-              <div>
-                <p className="text-xs text-zinc-500 uppercase font-semibold">Solved</p>
-                <p className="text-2xl font-bold text-white">
-                  {performance.correct}/{performance.total}
-                </p>
-              </div>
-            </div>
-          </Card>
-          
-          <Card className={`p-4 ${gradientBoard} ${borderBorder} border shadow-lg`}>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-500/10 rounded-full">
-                <Dna className="w-6 h-6 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-xs text-zinc-500 uppercase font-semibold">Avg. Time</p>
-                <p className="text-2xl font-bold text-white">{performance.avgTime.toFixed(1)}s</p>
-              </div>
-            </div>
-          </Card>
+      {/* Active Card Area */}
+      <div className="flex justify-center min-h-[550px] items-start">
+        {/* Increased max-w to 600px to accommodate larger board */}
+        <div className="w-full max-w-[600px] animate-in slide-in-from-bottom-4 duration-500 fade-in">
+          <EvolutionaryPuzzleCard 
+            key={currentPuzzle._id || currentIndex}
+            puzzle={currentPuzzle}
+            cardNumber={currentIndex + 1}
+            totalCards={puzzles.length}
+            onComplete={handlePuzzleComplete}
+          />
         </div>
-      )}
-
-      {/* Seed Puzzle Section */}
-      {seedPuzzle && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="h-[2px] flex-grow bg-gradient-to-r from-red-500/50 to-transparent"></div>
-            <h3 className="text-lg font-bold text-red-400 uppercase tracking-wider">
-              Phase 1: The Original Mistake
-            </h3>
-            <div className="h-[2px] flex-grow bg-gradient-to-l from-red-500/50 to-transparent"></div>
-          </div>
-          <div className="max-w-2xl mx-auto">
-            <EvolutionaryPuzzleCard
-              puzzle={seedPuzzle}
-              onComplete={(time, correct) => handlePuzzleComplete(seedPuzzle._id, time, correct)}
-              cardNumber={1}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Mutated Puzzles Section */}
-      {mutatedPuzzles.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="h-[2px] flex-grow bg-gradient-to-r from-purple-500/50 to-transparent"></div>
-            <h3 className="text-lg font-bold text-purple-400 uppercase tracking-wider">
-              Phase 2: Evolutionary Variations
-            </h3>
-            <div className="h-[2px] flex-grow bg-gradient-to-l from-purple-500/50 to-transparent"></div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {mutatedPuzzles.map((puzzle, idx) => (
-              <EvolutionaryPuzzleCard
-                key={puzzle._id}
-                puzzle={puzzle}
-                onComplete={(time, correct) => handlePuzzleComplete(puzzle._id, time, correct)}
-                cardNumber={idx + 2}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Completion Banner */}
-      {allCompleted && (
-        <Card className={`p-8 ${gradientBoard} ${borderBorder} border-2 shadow-2xl text-center animate-in zoom-in-95 duration-300`}>
-          <div className="flex flex-col items-center gap-4">
-            <div className={`p-6 rounded-full ${gradientGold}`}>
-              <Trophy className="w-16 h-16 text-black" />
-            </div>
-            <h3 className="text-3xl font-bold text-white">Training Complete! 🎉</h3>
-            <p className={`${textMuted} max-w-md text-lg`}>
-              You've successfully completed all evolutionary variations. 
-              Your pattern recognition skills just leveled up!
-            </p>
-            <div className="flex gap-4 mt-4">
-              <Button 
-                onClick={onBack}
-                className={`${gradientGold} ${textPrimaryForeground} font-semibold hover:opacity-90 transition-opacity px-8 py-6 text-lg`}
-              >
-                Return to Analysis
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
+      </div>
     </div>
   );
 };

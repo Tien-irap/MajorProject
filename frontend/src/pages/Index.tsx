@@ -5,13 +5,17 @@ import { ProfileCard } from "@/components/ProfileCard";
 import { RuleBook } from "@/components/RuleBook";
 import { AnalysisView } from "@/components/AnalysisView";
 import { TrainingRoom } from "@/components/TrainingRoom";
+import { EvolvedPuzzleView } from "@/components/EvolvedPuzzleView";
 import { toast } from "sonner";
+import type { EvolvedPuzzle } from "@/types";
 
-type ViewMode = 'dashboard' | 'analysis' | 'training';
+type ViewMode = 'dashboard' | 'analysis' | 'training' | 'evolved';
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [evolvedPuzzles, setEvolvedPuzzles] = useState<EvolvedPuzzle[]>([]);
+  const [isGeneratingPuzzles, setIsGeneratingPuzzles] = useState(false);
 
   const profileStats = {
     gamesWon: 142,
@@ -47,9 +51,44 @@ const Index = () => {
     }, 1500);
   };
 
-  const handleStartTraining = () => {
-    setViewMode('training');
-    toast.info("Welcome to the training room! Solve puzzles to improve your skills.");
+  const handleStartTraining = async (fen: string, moveUci: string, motif?: string) => {
+    setIsGeneratingPuzzles(true);
+    toast.info("Generating evolved puzzle variations...");
+    
+    try {
+      // Call backend API to generate puzzles
+      const response = await fetch('/api/training/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fen,
+          move_uci: moveUci,
+          motif: motif || 'Tactical Error',
+          difficulty_level: 1
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate puzzles');
+      }
+      
+      const puzzles: EvolvedPuzzle[] = await response.json();
+      
+      if (puzzles && puzzles.length > 0) {
+        setEvolvedPuzzles(puzzles);
+        setViewMode('evolved');
+        toast.success(`Generated ${puzzles.length} puzzle variations!`);
+      } else {
+        toast.error("Could not generate puzzles from this position");
+      }
+    } catch (error) {
+      console.error("Puzzle generation error:", error);
+      toast.error("Failed to generate puzzles. Please try again.");
+    } finally {
+      setIsGeneratingPuzzles(false);
+    }
   };
 
   const handleNextPuzzle = () => {
@@ -59,6 +98,10 @@ const Index = () => {
 
   const handleBackToDashboard = () => {
     setViewMode('dashboard');
+  };
+  
+  const handleBackToAnalysis = () => {
+    setViewMode('analysis');
   };
 
   return (
@@ -94,10 +137,10 @@ const Index = () => {
                 Analysis
               </button>
               <button 
-                onClick={handleStartTraining}
-                className={`text-sm font-medium transition-colors ${viewMode === 'training' ? 'text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={handleBackToDashboard}
+                className={`text-sm font-medium transition-colors ${viewMode === 'evolved' ? 'text-accent' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                Training
+                Evolved Puzzles
               </button>
             </nav>
           </div>
@@ -126,12 +169,29 @@ const Index = () => {
             onStartTraining={handleStartTraining}
           />
         )}
+        
+        {viewMode === 'evolved' && evolvedPuzzles.length > 0 && (
+          <EvolvedPuzzleView
+            puzzles={evolvedPuzzles}
+            onBackToAnalysis={handleBackToAnalysis}
+          />
+        )}
 
         {viewMode === 'training' && (
           <TrainingRoom
             puzzleData={mockPuzzle}
             onNextPuzzle={handleNextPuzzle}
           />
+        )}
+        
+        {isGeneratingPuzzles && (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+              <p className="text-lg font-semibold text-foreground">Evolving Puzzle Variations...</p>
+              <p className="text-sm text-muted-foreground mt-2">Using genetic algorithms to create unique positions</p>
+            </div>
+          </div>
         )}
       </main>
 

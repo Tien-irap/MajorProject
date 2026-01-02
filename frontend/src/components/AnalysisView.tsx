@@ -6,7 +6,7 @@ import type { AnalysisResult } from "src/types"; // Adjusted path
 
 interface AnalysisViewProps {
   analysis: AnalysisResult;
-  onStartTraining: (fen: string, moveUci: string) => void;
+  onStartTraining: (fen: string, moveUci: string, motif?: string) => void;
 }
 
 export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) => {
@@ -43,13 +43,15 @@ export const AnalysisView = ({ analysis, onStartTraining }: AnalysisViewProps) =
       // Use the FEN before the mistake and the move that was played
       const fen = firstMistake.move_info.board_before_fen;
       const moveUci = firstMistake.move_info.move; // This should be UCI format
+      const motif = firstMistake.motif; // Pass the motif from LLM analysis
       
       console.log("=== Starting Training ===");
       console.log("FEN:", fen);
       console.log("Move:", moveUci);
+      console.log("Motif:", motif);
       console.log("Mistake details:", firstMistake);
       
-      onStartTraining(fen, moveUci);
+      onStartTraining(fen, moveUci, motif);
     } else {
       // Fallback: if no mistakes, we can't generate puzzles
       console.warn("No mistakes found to generate puzzles from");
