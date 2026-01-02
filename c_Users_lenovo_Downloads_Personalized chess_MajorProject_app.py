@@ -7,6 +7,7 @@ import tempfile
 from PIL import Image
 import cairosvg
 import pandas as pd
+import random
 import os
 
 from backend.app.services.analyze_pgn import analyze_game, render_board_svg, analyze_with_logs
@@ -183,27 +184,36 @@ if uploaded_file is not None:
                     move_data = next((m for m in analysis_result if m['move'].uci() == example_move_uci), None)
                     if move_data:
                         # Get board state *before* the move
-                        board_before_move = chess.Board(move_data['board_before_fen'])
-                        # The 'board_fen' in analysis_result is *after* the move. 
-                        # We need the FEN *before* the move, which is stored in 'board_before_fen' for each move.
-                        # Let's assume your `analyze_game` function provides this. If not, this logic needs adjustment.
-                        # For this example, I'll use the FEN from the move data itself.
-                        st.image(render_board_svg(move_data['board_before_fen']))
+                        # The 'board_before_fen' key in move_data is the most reliable way to get the position before the move.
+                        board_before_fen = move_data.get('board_before_fen', chess.STARTING_FEN)
+                        st.image(render_board_svg(board_before_fen))
                         st.caption(f"Example position before the move {move_data['move'].uci()}")
 
                 # --- Interactive Puzzle Section ---
-                if st.button("Practice this weakness", key=f"practice_{profile_key}"):
-                    with st.spinner("Generating a custom puzzle for you..."):
-                        puzzle_data = generate_puzzle_from_weakness(profile_data['global_pattern_name'])
+                puzzle_state_key = f'puzzle_{profile_key}'
 
-                    if "error" in puzzle_data:
-                        st.error(f"Could not generate puzzle: {puzzle_data['error']}")
-                    else:
-                        # Store puzzle data in session state to persist it
-                        st.session_state[f'puzzle_{profile_key}'] = puzzle_data
+                # Use columns for better layout of buttons
+                p_col1, p_col2 = st.columns(2)
+                
+                with p_col1:
+                    if st.button("Practice this weakness", key=f"practice_{profile_key}"):
+                        # Generate a puzzle only if one isn't already active
+                        if puzzle_state_key not in st.session_state:
+                            with st.spinner("Generating a custom puzzle for you..."):
+                                puzzle_data = generate_puzzle_from_weakness(profile_data['global_pattern_name'])
+                                if "error" in puzzle_data:
+                                    st.error(f"Could not generate puzzle: {puzzle_data['error']}")
+                                else:
+                                    st.session_state[puzzle_state_key] = puzzle_data
 
                 # Display the puzzle if it exists in the session state
-                if f'puzzle_{profile_key}' in st.session_state:
+                if puzzle_state_key in st.session_state:
+                    with p_col2:
+                        if st.button("Get New Puzzle", key=f"new_puzzle_{profile_key}"):
+                            del st.session_state[puzzle_state_key]
+                            st.rerun() # Rerun to clear the old puzzle and allow generating a new one
+
+                if puzzle_state_key in st.session_state:
                     puzzle = st.session_state[f'puzzle_{profile_key}']
                     st.subheader("Interactive Puzzle")
                     st.image(render_board_svg(puzzle['fen']))
@@ -220,7 +230,6 @@ if uploaded_file is not None:
                     # Hint/Options button
                     if st.button("Stuck? Show options", key=f"options_{profile_key}"):
                         options = puzzle['distractors'] + [puzzle['solution_uci']]
-                        import random
                         random.shuffle(options)
                         
                         st.write("Which of these moves is best?")

@@ -1,8 +1,14 @@
+import os
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from backend.app.core.logger import logger
+
+# --- OPTION 2: Point to the 'output' folder dynamically ---
+# Logic: Go up 4 levels from 'backend/app/services/' to reach 'MajorProject'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CSV_PATH = os.path.join(BASE_DIR, "output", "global_mistake_features.csv")
 
 class GlobalAnalyzer:
     """
@@ -15,11 +21,25 @@ class GlobalAnalyzer:
         self.kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto') # Will be fitted on global data
         self.global_profile_descriptions = {} # Descriptions derived from cluster centers
         self.is_trained = False
+        
+        # Auto-load logic
+        self.load_and_train()
+
+    def load_and_train(self):
+        """Attempts to load the CSV and train the model automatically on initialization."""
+        if os.path.exists(CSV_PATH):
+            print(f"GlobalAnalyzer: Loading data from {CSV_PATH}")
+            try:
+                df = pd.read_csv(CSV_PATH)
+                self.train_global_model(df)
+            except Exception as e:
+                print(f"⚠️ GlobalAnalyzer Warning: Could not load or train from CSV. Error: {e}")
+        else:
+            print(f"⚠️ GlobalAnalyzer Warning: CSV not found at {CSV_PATH}. Model not trained.")
 
     def _interpret_cluster_center(self, center_data):
         """
         Generates a human-readable description for a cluster center based on its average features.
-        This provides the 'Global Weakness Pattern Name'.
         """
         center = center_data.to_dict()
         interpretation = []
@@ -53,8 +73,7 @@ class GlobalAnalyzer:
 
     def train_global_model(self, all_mistakes_df):
         """
-        Trains the K-Means model and scaler on the large dataframe of mistakes 
-        (from your global_mistake_features.csv).
+        Trains the K-Means model and scaler on the large dataframe of mistakes.
         """
         if all_mistakes_df.empty:
             raise ValueError("Cannot train GlobalAnalyzer: The provided DataFrame of mistakes is empty.")
@@ -91,7 +110,10 @@ class GlobalAnalyzer:
         pre-trained global model.
         """
         if not self.is_trained:
-            raise ValueError("GlobalAnalyzer is not trained. Call train_global_model first.")
+            # Attempt to re-train if called and still not ready (fallback)
+            self.load_and_train()
+            if not self.is_trained:
+                raise ValueError("GlobalAnalyzer is not trained. CSV file missing or empty.")
             
         numerical_features = user_mistakes_df[['move_num', 'eval_before', 'eval_diff', 'board_piece_count']]
         
