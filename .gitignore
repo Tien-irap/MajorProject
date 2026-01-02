@@ -12,6 +12,7 @@ stockfish/
 
 # Redis
 *.rdb
+dump.rdb
 
 # --- ADD THIS LINE ---
 # Node / Frontend

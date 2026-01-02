@@ -4,11 +4,14 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from backend.app.core.logger import logger
+from backend.app.core.config import settings
 
-# --- OPTION 2: Point to the 'output' folder dynamically ---
-# Logic: Go up 4 levels from 'backend/app/services/' to reach 'MajorProject'
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-CSV_PATH = os.path.join(BASE_DIR, "output", "global_mistake_features.csv")
+# Get CSV path from settings
+CSV_PATH = settings.GLOBAL_MISTAKES_CSV
+# If it's a relative path, make it absolute from the project root
+if not os.path.isabs(CSV_PATH):
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    CSV_PATH = os.path.join(BASE_DIR, CSV_PATH)
 
 class GlobalAnalyzer:
     """

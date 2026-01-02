@@ -10,10 +10,11 @@ from backend.app.services.move_classifier import (
     centipawns_to_win_probability
 )
 from backend.app.core.logger import logger
+from backend.app.core.config import settings
 
 
-# Path to the Stockfish executable
-engine_path = r"C:\Users\lenovo\Downloads\stockfish-windows-x86-64-avx2\stockfish\stockfish-windows-x86-64-avx2.exe"
+# Path to the Stockfish executable (use from config)
+engine_path = settings.STOCKFISH_PATH
 
 def analyze_with_logs(game, engine_path):
     # ... (rest of this function is unchanged) ...
@@ -66,7 +67,7 @@ def load_game_from_pgn(file_path):
     return game
 
 # Analyze moves 
-def evaluate_game(game, stockfish_path=r"C:\Users\lenovo\Downloads\stockfish-windows-x86-64-avx2\stockfish\stockfish-windows-x86-64-avx2.exe"):
+def evaluate_game(game, stockfish_path="./stockfish/stockfish-macos-m1-apple-silicon"):
     board = game.board()
     engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
