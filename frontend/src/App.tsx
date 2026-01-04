@@ -8,6 +8,7 @@ import { EvolutionaryTrainingRoom } from "./components/EvolutionaryTrainingRoom"
 import { ToastProvider, useToast } from "./hooks/UseToast";
 import { Loader2, LayoutDashboard, GraduationCap, ArrowLeft, Target, Swords } from "lucide-react";
 import { Button } from "./components/ui/stubs";
+import { FlashcardTrainer } from "./components/FlashcardTrainer";
 import type { AnalysisResult, StatusResponse, PuzzleDB, SubmitPuzzleResult } from "./types";
 import MasterComparison from "./components/MasterComparison"; 
 
@@ -314,7 +315,10 @@ const AppContent = () => {
 
         {/* UPLOAD STATE */}
         {!isLoading && !analysisResult && (
-          <UploadSection onUpload={handleUpload} isLoading={isLoading} />
+          <>
+            <UploadSection onUpload={handleUpload} isLoading={isLoading} />
+            <FlashcardTrainer />
+          </>
         )}
 
       </div>
