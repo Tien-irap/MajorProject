@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # Redis Service
+  redis:
+    image: redis:7-alpine
+    container_name: chess-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MongoDB Service
+  mongodb:
+    image: mongo:7
+    container_name: chess-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: chess_analysis_db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend Service (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: chess-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/
+      - DB_NAME=${DB_NAME:-chess_analysis_db}
+      - REDIS_URL=redis://redis:6379/0
+      - STOCKFISH_PATH=/usr/games/stockfish
+      - GLOBAL_MISTAKES_CSV=/app/output/global_mistake_features.csv
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - LOGGER=${LOGGER:-20}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery Worker Service
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: chess-celery-worker
+    command: celery -A backend.app.core.celery_app.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app/backend
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/
+      - DB_NAME=${DB_NAME:-chess_analysis_db}
+      - REDIS_URL=redis://redis:6379/0
+      - STOCKFISH_PATH=/usr/games/stockfish
+      - GLOBAL_MISTAKES_CSV=/app/output/global_mistake_features.csv
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - LOGGER=${LOGGER:-20}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend Service (Vite React)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: chess-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  mongodb_data:

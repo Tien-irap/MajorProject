@@ -1,0 +1,23 @@
+# Use Node 20 alpine for Vite 7.x compatibility
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package.json frontend/bun.lockb* ./
+
+# Install bun
+RUN npm install -g bun
+
+# Install dependencies
+RUN bun install
+
+# Copy frontend source
+COPY frontend/ .
+
+# Expose Vite dev server port
+EXPOSE 5173
+
+# Start development server
+CMD ["bun", "run", "dev", "--host"]

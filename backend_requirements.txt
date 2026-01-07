@@ -1,13 +1,38 @@
-fastapi
-uvicorn[standard]
-celery
-redis
-pymongo
-motor
-python-chess
-cairosvg
-Pillow
-pandas
-scikit-learn
-requests
-python-dotenv
+# Core Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Task Queue & Caching
+celery>=5.4.0
+redis>=5.2.0
+
+# Database
+pymongo>=4.10.1
+motor>=3.6.0
+
+# Chess Engine
+python-chess>=1.11.1
+stockfish>=3.28.0
+
+# Image Processing
+cairosvg>=2.7.1
+Pillow>=11.0.0
+
+# Data Processing & ML
+pandas>=2.2.0
+numpy>=2.0.0
+scikit-learn>=1.6.0
+
+# HTTP & Utilities
+requests>=2.32.0
+python-dotenv>=1.0.1
+
+# Logging (optional but recommended)
+python-json-logger>=2.0.7
+
+# CORS & Security
+python-multipart>=0.0.12
+
+# Validation
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
